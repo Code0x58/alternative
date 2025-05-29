@@ -1,0 +1,29 @@
+[project]
+name = "alternative"
+version = "0.1.0"
+description = "A library to help with the management of alternative implementations of functions"
+readme = "README.md"
+authors = [
+    { name = "Oliver Bristow", email = "evilumbrella+github@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest-benchmark>=5.1.0",
+    "pytest>=8.3.5",
+    "alternative",
+    "pytest-cov>=6.1.1",
+]
+
+[tool.uv.sources]
+alternative = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+# do 5 rounds of 0.01 benchmarks, as the benchmarks are examples or very fast
+addopts = "--cov=alternative --cov-report=html --benchmark-max-time=0.01"
