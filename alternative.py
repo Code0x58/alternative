@@ -4,8 +4,9 @@ import dataclasses
 import enum
 import inspect
 import os
-from functools import wraps, lru_cache
-from typing import Callable
+import types
+from functools import wraps, lru_cache, partial
+from typing import Callable, Concatenate
 from typing import cast, overload
 
 
@@ -72,11 +73,71 @@ def get_caller_path() -> str | None:
     return f"{module}.{qualname} ({location})"
 
 
+# TODO: see if this can be made to work with the type checking
+def implementation_decorator[I, **P, R](
+    f: Callable[Concatenate[I, P], R], /
+) -> Callable[Concatenate[I, P], R | Callable[[I], R]]:
+    def wrapper(
+        implementation: I | _UNDEFINED = UNDEFINED, /, *args: P.args, **kwargs: P.kwargs
+    ) -> R | Callable[[I], R]:
+        if isinstance(implementation, _UNDEFINED):
+
+            def inner_wrapper(implementation: I, /) -> R:
+                return f(implementation, *args, **kwargs)
+
+            return inner_wrapper
+        return f(implementation, *args, **kwargs)
+
+    return wrapper
+
+def implementation_method_decorator[S, I, **P, R](
+    f: Callable[Concatenate[S, I, P], R], /
+) -> Callable[Concatenate[S, I, P], R | Callable[[I], R]]:
+    def wrapper(
+        self: S, implementation: I | _UNDEFINED = UNDEFINED, /, *args: P.args, **kwargs: P.kwargs
+    ) -> R | Callable[[I], R]:
+        if isinstance(implementation, _UNDEFINED):
+            def inner_wrapper(implementation: I, /) -> R:
+                return f(self, implementation, *args, **kwargs)
+
+            return inner_wrapper
+        return f(implementation, *args, **kwargs)
+
+    return wrapper
+
+
 def maybe_get_caller_path() -> str | None:
     """Return the call site if DEBUG is True, otherwise None."""
     if DEBUG:
         return get_caller_path()
     return None
+
+
+def implementation_label(o: types.FunctionType | type) -> str:
+    """Return a string that is a reasonable label for an implementation."""
+    try:
+        file = inspect.getsourcefile(o)
+    except TypeError:
+        # e.g. if o is defined in C (e.g. itertools.chain or chr)
+        file = None
+
+    # TODO: look at more strictly checking for functions and classes
+    if code := getattr(o, "__code__", None):
+        first_line = code.co_firstlineno
+        qualname = o.__qualname__
+    else:
+        if isinstance(o, type):
+            t = o
+        else:
+            t = type(o)
+        # will be None with python < 3.13
+        first_line = getattr(t, "__firstlineno__", None)
+        qualname = t.__qualname__
+
+    # TODO: look at allowing types.ModuleType as alternatives
+
+    # this starts with the file to help disambiguate + it gets linked in at least PyCharm's console
+    return f"{file}:{first_line} {qualname}"
 
 
 class Mutability(enum.IntEnum):
@@ -122,6 +183,9 @@ class Alternatives[**P, R]:
         self._debug_implementations_used: str | None = None
 
         self.add(imp, default=default)
+
+    def __repr__(self):
+        return implementation_label(self.reference.implementation)
 
     @overload
     def add(
@@ -356,7 +420,12 @@ class Implementation[**P, R]:
     alternatives: Alternatives[P, R]
     implementation: Callable[P, R]
 
-    # TODO: add something like "label" which can be printed, e.g. "examples/test_measure.py:36" which would be a hyperlink in PyCharm
+    # TODO: add a test for decorators that makes sure a wrapper/inner is returned - can derive from the reference function
+    #   - might be able to just make a decorator decorator...
+    # TODO: add an example of the implementation being a class
+
+    def __repr__(self):
+        return implementation_label(self.implementation)
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
         self.__call__ = self.implementation
