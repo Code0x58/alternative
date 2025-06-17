@@ -15,6 +15,9 @@ dev = [
     "pytest>=8.3.5",
     "alternative",
     "pytest-cov>=6.1.1",
+    "ruff>=0.0.292",
+    "pyrefly>=0.20",
+    "mypy>=1.8",
 ]
 
 [tool.uv.sources]
