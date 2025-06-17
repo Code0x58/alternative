@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ master ]
+        run: uv pip install --system --editable . --group dev
   pull_request:
 
 jobs:
