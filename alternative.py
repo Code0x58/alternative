@@ -6,7 +6,7 @@ import inspect
 import os
 import types
 from functools import wraps, lru_cache, partial
-from typing import Callable, Concatenate
+from typing import Callable, Concatenate, ParamSpec, TypeVar
 from typing import cast, overload
 
 
@@ -27,6 +27,10 @@ UNDEFINED = _UNDEFINED()
 type ImplementationSig[**P, R] = Callable[P, R] | Implementation[P, R]
 type AlternativesWrapper[**P, R] = Callable[[ImplementationSig], Alternatives[P, R]]
 type ImplementationWrapper[**P, R] = Callable[[ImplementationSig], Implementation[P, R]]
+
+# ParamSpec and TypeVar used for annotating decorators
+PTest = ParamSpec("PTest")
+RTest = TypeVar("RTest")
 
 
 class AlternativeError(Exception):
@@ -77,6 +81,7 @@ def get_caller_path() -> str | None:
 def implementation_decorator[I, **P, R](
     f: Callable[Concatenate[I, P], R], /
 ) -> Callable[Concatenate[I, P], R | Callable[[I], R]]:
+    @wraps(f)
     def wrapper(
         implementation: I | _UNDEFINED = UNDEFINED, /, *args: P.args, **kwargs: P.kwargs
     ) -> R | Callable[[I], R]:
@@ -93,6 +98,7 @@ def implementation_decorator[I, **P, R](
 def implementation_method_decorator[S, I, **P, R](
     f: Callable[Concatenate[S, I, P], R], /
 ) -> Callable[Concatenate[S, I, P], R | Callable[[I], R]]:
+    @wraps(f)
     def wrapper(
         self: S, implementation: I | _UNDEFINED = UNDEFINED, /, *args: P.args, **kwargs: P.kwargs
     ) -> R | Callable[[I], R]:
@@ -101,7 +107,7 @@ def implementation_method_decorator[S, I, **P, R](
                 return f(self, implementation, *args, **kwargs)
 
             return inner_wrapper
-        return f(implementation, *args, **kwargs)
+        return f(self, implementation, *args, **kwargs)
 
     return wrapper
 
@@ -288,19 +294,22 @@ class Alternatives[**P, R]:
             return result
 
     @overload
-    def pytest_parametrize(
+    def pytest_parametrize[
+        **PTest, RT](
         self,
         test: _UNDEFINED = UNDEFINED,
         *,
         only_default: bool = False,
-    ): ...
+    ) -> Callable[[Callable[PTest, RT]], Callable[PTest, RT]]: ...
+
     @overload
-    def pytest_parametrize(
+    def pytest_parametrize[
+        **PTest, RT](
         self,
-        test: Callable,
+        test: Callable[PTest, RT],
         *,
         only_default: bool = False,
-    ): ...
+    ) -> Callable[PTest, RT]: ...
     def pytest_parametrize(
         self,
         test=UNDEFINED,
@@ -340,23 +349,26 @@ class Alternatives[**P, R]:
         return inner
 
     @overload
-    def pytest_parametrize_pairs(
+    def pytest_parametrize_pairs[
+        **PTest, RT](
         self,
         test: _UNDEFINED = UNDEFINED,
         *,
         n_cache: int | None = 0,
         double_reference: bool = False,
         only_default: bool = False,
-    ): ...
+    ) -> Callable[[Callable[PTest, RT]], Callable[PTest, RT]]: ...
+
     @overload
-    def pytest_parametrize_pairs(
+    def pytest_parametrize_pairs[
+        **PTest, RT](
         self,
-        test: Callable,
+        test: Callable[PTest, RT],
         *,
         n_cache: int | None = 0,
         double_reference: bool = False,
         only_default: bool = False,
-    ): ...
+    ) -> Callable[PTest, RT]: ...
 
     def pytest_parametrize_pairs(
         self,
