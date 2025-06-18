@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v1
+
+      - name: Install dependencies
+        run: |
+          uv sync --dev
+          uv tool install ruff
+          uv tool install pyrefly
+          uv tool install mypy
+          uv add --dev pytest pytest-cov pytest-benchmark
+          uv add --dev --editable .
+
+      - name: Ruff format check
+        run: uv run --dev ruff format --check --diff .
+        continue-on-error: true
+
+      - name: Type check
+        run: |
+          uv run --dev pyrefly check .
+          uv run --dev mypy .
+        continue-on-error: true
+
+      - name: Test
+        run: uv run --dev pytest
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: pypa/gh-action-pypi-publish@release/v1

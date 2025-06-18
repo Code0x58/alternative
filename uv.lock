@@ -5,6 +5,9 @@ requires-python = ">=3.12"
 name = "alternative"
 version = "0.1.0"
 source = { editable = "." }
+dependencies = [
+    { name = "pytest" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -14,6 +17,7 @@ dev = [
 ]
 
 [package.metadata]
+requires-dist = [{ name = "pytest", specifier = ">=8.3.5" }]
 
 [package.metadata.requires-dev]
 dev = [
