@@ -1,4 +1,4 @@
-from inspect import ismethod, ismethodwrapper
+from inspect import ismethod
 from typing import Callable
 from unittest.mock import Mock
 
@@ -49,14 +49,19 @@ def test_pass_through_function(f, args, kwargs):
     assert direct is decorated
     assert f_mock.call_args_list[0] == f_mock.call_args_list[1]
 
-def test_thing():
+def test_method_descriptor():
+    """Decorated methods behave as descriptors."""
+
     class C:
         @implementation_method_decorator
-        def m1(self, imp, /, **kwargs):
+        def m(self, imp, /, **kwargs):
             return imp
 
-        def m1(self, imp, /, **kwargs):
-            return imp
+    c = C()
+    implementation = object()
 
-    ismethod()
-    ismethodwrapper()
+    # direct invocation passes through the arguments
+    assert c.m(implementation) is implementation
+
+    bound = c.m()
+    assert bound(implementation) is implementation
