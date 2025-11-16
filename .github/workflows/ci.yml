@@ -49,9 +49,9 @@ jobs:
         continue-on-error: true
 
       - name: Run tests
-        env:
-          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "0"
-        run: uv run --dev pytest -vv --cov=alternative --cov-report=xml --junitxml=test-results.xml
+        run: |
+          unset PYTEST_DISABLE_PLUGIN_AUTOLOAD
+          uv run --dev pytest -vv --cov=alternative --cov-report=xml --junitxml=test-results.xml
 
       - name: Upload coverage to Codecov
         if: always() && env.CODECOV_TOKEN != ''
