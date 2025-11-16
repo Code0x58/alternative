@@ -50,11 +50,11 @@ jobs:
 
       - name: Run tests
         run: |
-          # GitHub-hosted runners set PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 which prevents
-          # pytest from discovering pytest-cov and pytest-benchmark via entry points.
-          # Load the plugins explicitly so that coverage and benchmark addopts work
-          # regardless of the environment default.
-          uv run --dev pytest -p pytest_cov -p pytest_benchmark.plugin -vv --cov=alternative --cov-report=xml --junitxml=test-results.xml
+          # Some GitHub-hosted runners export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1.
+          # Unset it so pytest can discover pytest-cov and pytest-benchmark via entry points,
+          # which are required by the addopts configured in pyproject.toml.
+          unset PYTEST_DISABLE_PLUGIN_AUTOLOAD
+          uv run --dev pytest -vv --cov=alternative --cov-report=xml --junitxml=test-results.xml
 
       - name: Upload coverage to Codecov
         if: always() && env.CODECOV_TOKEN != ''
