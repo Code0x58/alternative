@@ -257,16 +257,9 @@ class Alternatives[**P, R]:
 
             return inner
 
-        # FIXME: pull out this block into a function to test that implementations is made correctly
-        #   + make sure that all arguments are passed through correctly
-        if only_default:
-            reference_implementation = self.reference.implementation
-            default_implementation = self.callable
-            implementations = [reference_implementation]
-            if default_implementation is not reference_implementation:
-                implementations.append(default_implementation)
-        else:
-            implementations = [i.implementation for i in self.implementations]
+        implementations = self._select_parametrize_implementations(
+            only_default=only_default
+        )
 
         @pytest.mark.parametrize("implementation", implementations)
         @wraps(test)
@@ -326,21 +319,15 @@ class Alternatives[**P, R]:
 
             return inner
 
-        # FIXME: pull out this block into a function to test that reference+implementations is made correctly
-        #   + make sure that all arguments are passed through correctly
         reference_implementation = lru_cache(maxsize=n_cache)(
             self.reference.implementation
         )
 
-        # use the underlying functions instead of the implementation objects so pytest can generate helpful names
-        if only_default:
-            implementations = [self.callable]
-            if double_reference and self.callable is not self.reference.implementation:
-                implementations[:0] = [reference_implementation]
-        else:
-            implementations = [i.implementation for i in self.implementations[1:]]
-            if double_reference:
-                implementations[:0] = [reference_implementation]
+        implementations = self._select_parametrize_pairs(
+            reference_implementation=reference_implementation,
+            only_default=only_default,
+            double_reference=double_reference,
+        )
 
         @pytest.mark.parametrize("reference", [reference_implementation])
         @pytest.mark.parametrize("implementation", implementations)
@@ -349,6 +336,39 @@ class Alternatives[**P, R]:
             return test(*args, **kwargs)
 
         return inner
+
+    def _select_parametrize_implementations(
+        self, *, only_default: bool
+    ) -> list[Callable[P, R]]:
+        """Return implementation callables used for ``pytest_parametrize``."""
+        if only_default:
+            reference_implementation = self.reference.implementation
+            default_implementation = self.callable
+            implementations = [reference_implementation]
+            if default_implementation is not reference_implementation:
+                implementations.append(default_implementation)
+            return implementations
+        return [i.implementation for i in self.implementations]
+
+    def _select_parametrize_pairs(
+        self,
+        *,
+        reference_implementation: Callable[P, R],
+        only_default: bool,
+        double_reference: bool,
+    ) -> list[Callable[P, R]]:
+        """Return implementation callables used for ``pytest_parametrize_pairs``."""
+        # use underlying functions so pytest can generate readable IDs.
+        if only_default:
+            implementations = [self.callable]
+            if double_reference and self.callable is not self.reference.implementation:
+                implementations[:0] = [reference_implementation]
+            return implementations
+
+        implementations = [i.implementation for i in self.implementations[1:]]
+        if double_reference:
+            implementations[:0] = [reference_implementation]
+        return implementations
 
 
 @dataclasses.dataclass(unsafe_hash=True)
