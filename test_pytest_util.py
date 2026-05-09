@@ -1,4 +1,5 @@
 import inspect
+from collections.abc import Callable
 
 import alternative
 import pytest
@@ -50,9 +51,14 @@ def test_select_parametrize_implementations(only_default: bool):
     def extra_impl():
         return 3
 
-    selected = reference_impl._select_parametrize_implementations(  # pyrefly: ignore
-        only_default=only_default
+    def parametrized(implementation: Callable[[], int]) -> None:
+        """Placeholder test used to inspect pytest parametrization values."""
+        assert implementation() in {1, 2, 3}
+
+    decorated = reference_impl.pytest_parametrize(
+        parametrized, only_default=only_default
     )
+    selected = _parametrize_values(decorated, "implementation")[0]
     default_callable = default_impl.implementation
     extra_callable = extra_impl.implementation
     if only_default:
@@ -76,9 +82,12 @@ def test_select_parametrize_implementations_with_implicit_default():
     def extra_impl():
         return 2
 
-    selected = reference_impl._select_parametrize_implementations(  # pyrefly: ignore
-        only_default=True
-    )
+    def parametrized(implementation: Callable[[], int]) -> None:
+        """Placeholder test used to inspect pytest parametrization values."""
+        assert implementation() in {1, 2}
+
+    decorated = reference_impl.pytest_parametrize(parametrized, only_default=True)
+    selected = _parametrize_values(decorated, "implementation")[0]
 
     assert selected == [
         reference_impl.reference.implementation,
@@ -97,9 +106,12 @@ def test_select_parametrize_implementations_with_explicit_reference_default():
     def extra_impl():
         return 2
 
-    selected = reference_impl._select_parametrize_implementations(  # pyrefly: ignore
-        only_default=True
-    )
+    def parametrized(implementation: Callable[[], int]) -> None:
+        """Placeholder test used to inspect pytest parametrization values."""
+        assert implementation() in {1, 2}
+
+    decorated = reference_impl.pytest_parametrize(parametrized, only_default=True)
+    selected = _parametrize_values(decorated, "implementation")[0]
 
     assert selected == [reference_impl.reference.implementation]
 

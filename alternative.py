@@ -5,8 +5,8 @@ import inspect
 import os
 from functools import wraps, lru_cache
 from typing import (
-    Any,
     Callable,
+    Concatenate,
     Final,
     Generic,
     ParamSpec,
@@ -45,18 +45,52 @@ class _SupportsLessThan(Protocol):
     def __lt__(self, other: object, /) -> bool: ...
 
 
-class _Descriptor(Protocol):
-    def __get__(
-        self, instance: object | None, owner: type[Any] | None = None, /
-    ) -> Any: ...
-
-
 _UNDEFINED_VALUE: Final = _Undefined()
 
 P = ParamSpec("P")
 R = TypeVar("R")
+R_co = TypeVar("R_co", covariant=True)
 M = TypeVar("M")
-F = TypeVar("F", bound=Callable[..., Any])
+S = TypeVar("S")
+Owner = TypeVar("Owner")
+F = TypeVar("F", bound=Callable[..., object])
+
+
+class _NoReceiver:
+    """Marker type for descriptors that bind themselves before user calls."""
+
+
+class _TypedDescriptor(Protocol[P, R_co]):
+    def __get__(
+        self, instance: object | None, owner: type[object] | None = None, /
+    ) -> Callable[P, R_co]: ...
+
+
+class _ReferenceDecorator(Protocol):
+    @overload
+    def __call__(
+        self, implementation: classmethod[Owner, P, R], /
+    ) -> Alternatives[_NoReceiver, P, R]: ...
+
+    @overload
+    def __call__(
+        self, implementation: staticmethod[P, R], /
+    ) -> Alternatives[_NoReceiver, P, R]: ...
+
+    @overload
+    def __call__(
+        self, implementation: Callable[Concatenate[type[Owner], P], R], /
+    ) -> Alternatives[_NoReceiver, P, R]: ...
+
+    @overload
+    def __call__(
+        self, implementation: Callable[Concatenate[S, P], R], /
+    ) -> Alternatives[S, P, R]: ...
+
+    @overload
+    def __call__(
+        self, implementation: Callable[P, R], /
+    ) -> Alternatives[_NoReceiver, P, R]: ...
 
 
 class AlternativeError(Exception):
@@ -115,69 +149,155 @@ def _maybe_get_caller_path() -> str | None:
 
 
 def _bind_implementation(
-    implementation: Any,
+    implementation: Callable[..., R] | _TypedDescriptor[P, R],
     instance: object | None,
-    owner: type[Any] | None,
-) -> Callable[P, R]:
+    owner: type[object] | None,
+) -> Callable[..., R]:
     """Bind an implementation using descriptor semantics when available."""
     if owner is None and instance is not None:
         owner = type(instance)
 
-    descriptor_get = getattr(implementation, "__get__", None)
-    if descriptor_get is not None and owner is not None:
-        return cast(Callable[P, R], descriptor_get(instance, owner))
-    return cast(Callable[P, R], implementation)
+    if hasattr(implementation, "__get__") and owner is not None:
+        return cast(_TypedDescriptor[P, R], implementation).__get__(instance, owner)
+    return cast(Callable[..., R], implementation)
 
 
 @dataclasses.dataclass(frozen=True)
-class _BoundAlternatives(Generic[P, R]):
-    alternatives: Alternatives[P, R]
+class _BoundAlternatives(Generic[S, P, R]):
+    alternatives: Alternatives[S, P, R]
     instance: object | None
-    owner: type[Any] | None
+    owner: type[object] | None
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
-        implementation: Callable[P, R] = _bind_implementation(
+        implementation: Callable[..., R] = _bind_implementation(
             self.alternatives.callable, self.instance, self.owner
         )
         return implementation(*args, **kwargs)
 
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self.alternatives, name)
+    @overload
+    def add(
+        self: _BoundAlternatives[_NoReceiver, P, R],
+        implementation: Callable[P, R]
+        | Callable[Concatenate[type[Owner], P], R]
+        | classmethod[Owner, P, R]
+        | staticmethod[P, R],
+        *,
+        default: bool = False,
+    ) -> Implementation[_NoReceiver, P, R]: ...
+
+    @overload
+    def add(
+        self,
+        implementation: Callable[Concatenate[S, P], R] | Implementation[S, P, R],
+        *,
+        default: bool = False,
+    ) -> Implementation[S, P, R]: ...
+
+    @overload
+    def add(
+        self, *, default: bool = False
+    ) -> Callable[
+        [Callable[..., R] | classmethod[Owner, P, R] | staticmethod[P, R]],
+        Implementation[S, P, R],
+    ]: ...
+
+    def add(
+        self,
+        implementation: object = _UNDEFINED_VALUE,
+        *,
+        default: bool = False,
+    ) -> object:
+        add = cast(Callable[..., object], self.alternatives.add)
+        return add(implementation, default=default)
+
+    @property
+    def implementations(self) -> list[Implementation[S, P, R]]:
+        return self.alternatives.implementations
+
+    @property
+    def reference(self) -> Implementation[S, P, R]:
+        return self.alternatives.reference
+
+    @property
+    def callable(self) -> Callable[..., R] | _TypedDescriptor[P, R]:
+        return self.alternatives.callable
 
 
 @dataclasses.dataclass(frozen=True)
-class _BoundImplementation(Generic[P, R]):
-    implementation: Implementation[P, R]
+class _BoundImplementation(Generic[S, P, R]):
+    implementation: Implementation[S, P, R]
     instance: object | None
-    owner: type[Any] | None
+    owner: type[object] | None
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
-        implementation: Callable[P, R] = _bind_implementation(
+        implementation: Callable[..., R] = _bind_implementation(
             self.implementation.implementation, self.instance, self.owner
         )
         return implementation(*args, **kwargs)
 
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self.implementation, name)
+    @property
+    def alternatives(self) -> Alternatives[S, P, R]:
+        return self.implementation.alternatives
+
+    @overload
+    def add(
+        self: _BoundImplementation[_NoReceiver, P, R],
+        implementation: Callable[P, R]
+        | Callable[Concatenate[type[Owner], P], R]
+        | classmethod[Owner, P, R]
+        | staticmethod[P, R],
+        *,
+        default: bool = False,
+    ) -> Implementation[_NoReceiver, P, R]: ...
+
+    @overload
+    def add(
+        self,
+        implementation: Callable[Concatenate[S, P], R] | Implementation[S, P, R],
+        *,
+        default: bool = False,
+    ) -> Implementation[S, P, R]: ...
+
+    @overload
+    def add(
+        self, *, default: bool = False
+    ) -> Callable[
+        [Callable[..., R] | classmethod[Owner, P, R] | staticmethod[P, R]],
+        Implementation[S, P, R],
+    ]: ...
+
+    def add(
+        self,
+        implementation: object = _UNDEFINED_VALUE,
+        *,
+        default: bool = False,
+    ) -> object:
+        add = cast(Callable[..., object], self.implementation.add)
+        return add(implementation, default=default)
 
 
-class Alternatives(Generic[P, R]):
-    def __init__(self, implementation: Any, *, default: bool = False):
+class Alternatives(Generic[S, P, R]):
+    def __init__(
+        self,
+        implementation: Callable[..., R] | _TypedDescriptor[P, R],
+        *,
+        default: bool = False,
+    ):
         imp = Implementation(self, implementation, label=_maybe_get_caller_path())
         self.reference = imp
         # tracks the active implementation
-        self._default: Implementation[P, R] | None = None
+        self._default: Implementation[S, P, R] | None = None
         self._debug_default: str | None = None
         self._invoked = False
         self._debug_invoked_site: str | None = None
         # tracks the use of the set should be
         self._enumerated = False
 
-        self._callable: Any | None = None
+        self._callable: Callable[..., R] | _TypedDescriptor[P, R] | None = None
         self._debug_callable_used: str | None = None
 
         # beware the order of this depends on the sequence of imports, so may vary between entrypoints
-        self._implementations: list[Implementation[P, R]] = []
+        self._implementations: list[Implementation[S, P, R]] = []
         self._implementations_used: bool = False
         """indicates if the list of implementations has been used though the external API"""
         self._debug_implementations_used: str | None = None
@@ -185,22 +305,37 @@ class Alternatives(Generic[P, R]):
 
     @overload
     def add(
-        self, *, default: bool = False
-    ) -> Callable[[Any], Implementation[P, R]]: ...
+        self: Alternatives[_NoReceiver, P, R],
+        implementation: Callable[P, R]
+        | Callable[Concatenate[type[Owner], P], R]
+        | classmethod[Owner, P, R]
+        | staticmethod[P, R],
+        *,
+        default: bool = False,
+    ) -> Implementation[_NoReceiver, P, R]: ...
+
     @overload
     def add(
         self,
-        implementation: Any,
+        implementation: Callable[Concatenate[S, P], R] | Implementation[S, P, R],
         *,
         default: bool = False,
-    ) -> Implementation[P, R]: ...
+    ) -> Implementation[S, P, R]: ...
+
+    @overload
+    def add(
+        self, *, default: bool = False
+    ) -> Callable[
+        [Callable[..., R] | classmethod[Owner, P, R] | staticmethod[P, R]],
+        Implementation[S, P, R],
+    ]: ...
 
     def add(
         self,
-        implementation: Any = _UNDEFINED_VALUE,
+        implementation: object = _UNDEFINED_VALUE,
         *,
         default: bool = False,
-    ) -> Implementation[P, R] | Callable[[Any], Implementation[P, R]]:
+    ) -> object:
         if self._implementations_used:
             # avoid surprises from implementation changes after selection/inspection
             if DEBUG:
@@ -212,15 +347,20 @@ class Alternatives(Generic[P, R]):
         if isinstance(implementation, _Undefined):
 
             def wrapper(
-                implementation: Any,
-            ) -> Implementation[P, R]:
-                return self.add(implementation, default=default)
+                implementation: Callable[..., R] | _TypedDescriptor[P, R],
+            ) -> Implementation[S, P, R]:
+                add = cast(Callable[..., Implementation[S, P, R]], self.add)
+                return add(implementation, default=default)
 
             return wrapper
 
         label = _maybe_get_caller_path()
         if not isinstance(implementation, Implementation):
-            imp = Implementation(self, implementation, label=label)
+            imp = Implementation(
+                self,
+                cast(Callable[..., R] | _TypedDescriptor[P, R], implementation),
+                label=label,
+            )
         elif implementation.alternatives is not self:
             raise CrossAlternativesImplementationError(
                 f"Cannot add {implementation!r} to {self.reference!r}; "
@@ -246,7 +386,7 @@ class Alternatives(Generic[P, R]):
         return imp
 
     @property
-    def callable(self) -> Any:
+    def callable(self) -> Callable[..., R] | _TypedDescriptor[P, R]:
         """Return the active implementation.
 
         Setting the default implementation is disabled after this is accessed."""
@@ -262,24 +402,80 @@ class Alternatives(Generic[P, R]):
         return self._callable
 
     @property
-    def implementations(self) -> list[Implementation[P, R]]:
+    def implementations(self) -> list[Implementation[S, P, R]]:
         if not self._implementations_used:
             self._implementations_used = True
             self._debug_implementations_used = _maybe_get_caller_path()
         return self._implementations
 
-    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
-        implementation: Callable[P, R] = _bind_implementation(self.callable, None, None)
-        return implementation(*args, **kwargs)
+    @overload
+    def __call__(
+        self: Alternatives[_NoReceiver, P, R],
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> R: ...
+
+    @overload
+    def __call__(self, receiver: S, *args: P.args, **kwargs: P.kwargs) -> R: ...
+
+    def __call__(
+        self,
+        receiver: object = _UNDEFINED_VALUE,
+        *args: object,
+        **kwargs: object,
+    ) -> R:
+        implementation: Callable[..., R] = _bind_implementation(
+            self.callable, None, None
+        )
+        if isinstance(receiver, _Undefined):
+            return implementation(**kwargs)
+        return implementation(receiver, *args, **kwargs)
+
+    @overload
+    def __get__(
+        self, instance: None, owner: type[object] | None = None
+    ) -> Alternatives[S, P, R]: ...
+
+    @overload
+    def __get__(
+        self: Alternatives[_NoReceiver, P, R],
+        instance: object,
+        owner: type[object] | None = None,
+    ) -> _BoundAlternatives[_NoReceiver, P, R]: ...
+
+    @overload
+    def __get__(
+        self, instance: S, owner: type[object] | None = None
+    ) -> _BoundAlternatives[S, P, R]: ...
+
+    @overload
+    def __get__(
+        self, instance: object, owner: type[object] | None = None
+    ) -> Callable[Concatenate[S, P], R]: ...
 
     def __get__(
-        self, instance: object | None, owner: type[Any] | None = None
-    ) -> _BoundAlternatives[P, R]:
+        self, instance: object | None, owner: type[object] | None = None
+    ) -> object:
+        if instance is None and not self._binds_on_class_access():
+            return self
         return _BoundAlternatives(self, instance, owner)
 
+    def _binds_on_class_access(self) -> bool:
+        """Return True when class access needs descriptor binding before calling."""
+        implementation = (
+            self._default.implementation
+            if self._default is not None
+            else self.reference.implementation
+        )
+        return isinstance(implementation, classmethod)
+
     def measure(
-        self, /, operator: Callable[[R], M], *args: P.args, **kwargs: P.kwargs
-    ) -> dict[Implementation[P, R], M]:
+        self,
+        /,
+        operator: Callable[[R], M],
+        *args: object,
+        **kwargs: object,
+    ) -> dict[Implementation[S, P, R], M]:
         """Invoke each implementation with the given parameters, then evaluate their results with the operator.
 
         This is useful when comparing implementations that have different results, which can be compared by some cost.
@@ -289,7 +485,8 @@ class Alternatives(Generic[P, R]):
         __lt__(a,b) is called); otherwise they are returned in the order of the implementations.
         """
         result = {
-            i: operator(i.implementation(*args, **kwargs)) for i in self.implementations
+            i: operator(cast(Callable[..., R], i)(*args, **kwargs))
+            for i in self.implementations
         }
         try:
             # try to sort the dictionary by the measurements
@@ -297,7 +494,9 @@ class Alternatives(Generic[P, R]):
                 sorted(
                     result.items(),
                     key=cast(
-                        Callable[[tuple[Implementation[P, R], M]], _SupportsLessThan],
+                        Callable[
+                            [tuple[Implementation[S, P, R], M]], _SupportsLessThan
+                        ],
                         lambda x: cast(_SupportsLessThan, x[1]),
                     ),
                 )
@@ -344,7 +543,7 @@ class Alternatives(Generic[P, R]):
 
         @pytest.mark.parametrize("implementation", implementations)
         @wraps(test)
-        def inner(*args: Any, **kwargs: Any) -> Any:
+        def inner(*args: object, **kwargs: object) -> object:
             return test(*args, **kwargs)
 
         return cast(F, inner)
@@ -400,8 +599,10 @@ class Alternatives(Generic[P, R]):
             return decorator
 
         reference_implementation = cast(
-            Callable[P, R],
-            lru_cache(maxsize=n_cache)(self.reference.implementation),
+            Callable[..., R],
+            lru_cache(maxsize=n_cache)(
+                cast(Callable[..., R], self.reference.implementation)
+            ),
         )
 
         implementations = self._select_parametrize_pairs(
@@ -413,19 +614,21 @@ class Alternatives(Generic[P, R]):
         @pytest.mark.parametrize("reference", [reference_implementation])
         @pytest.mark.parametrize("implementation", implementations)
         @wraps(test)
-        def inner(*args: Any, **kwargs: Any) -> Any:
+        def inner(*args: object, **kwargs: object) -> object:
             return test(*args, **kwargs)
 
         return cast(F, inner)
 
     def _select_parametrize_implementations(
         self, *, only_default: bool
-    ) -> list[Callable[P, R]]:
+    ) -> list[Callable[..., R] | _TypedDescriptor[P, R]]:
         """Return implementation callables used for ``pytest_parametrize``."""
         if only_default:
             reference_implementation = self.reference.implementation
             default_implementation = self.callable
-            implementations = [reference_implementation]
+            implementations: list[Callable[..., R] | _TypedDescriptor[P, R]] = [
+                reference_implementation
+            ]
             if default_implementation is not reference_implementation:
                 implementations.append(default_implementation)
             return implementations
@@ -434,12 +637,13 @@ class Alternatives(Generic[P, R]):
     def _select_parametrize_pairs(
         self,
         *,
-        reference_implementation: Callable[P, R],
+        reference_implementation: Callable[..., R],
         only_default: bool,
         double_reference: bool,
-    ) -> list[Callable[P, R]]:
+    ) -> list[Callable[..., R] | _TypedDescriptor[P, R]]:
         """Return implementation callables used for ``pytest_parametrize_pairs``."""
         # use underlying functions so pytest can generate readable IDs.
+        implementations: list[Callable[..., R] | _TypedDescriptor[P, R]]
         if only_default:
             implementations = [self.callable]
             if double_reference and self.callable is not self.reference.implementation:
@@ -453,9 +657,9 @@ class Alternatives(Generic[P, R]):
 
 
 @dataclasses.dataclass(unsafe_hash=True)
-class Implementation(Generic[P, R]):
-    alternatives: Alternatives[P, R]
-    implementation: Any
+class Implementation(Generic[S, P, R]):
+    alternatives: Alternatives[S, P, R]
+    implementation: Callable[..., R] | _TypedDescriptor[P, R]
     label: str | None = None
 
     def __post_init__(self):
@@ -470,70 +674,151 @@ class Implementation(Generic[P, R]):
             return f"Implementation({implementation_name}, label={self.label!r})"
         return f"Implementation({implementation_name})"
 
-    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
-        implementation: Callable[P, R] = _bind_implementation(
+    @overload
+    def __call__(
+        self: Implementation[_NoReceiver, P, R],
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> R: ...
+
+    @overload
+    def __call__(self, receiver: S, *args: P.args, **kwargs: P.kwargs) -> R: ...
+
+    def __call__(
+        self,
+        receiver: object = _UNDEFINED_VALUE,
+        *args: object,
+        **kwargs: object,
+    ) -> R:
+        implementation: Callable[..., R] = _bind_implementation(
             self.implementation, None, None
         )
-        return implementation(*args, **kwargs)
+        if isinstance(receiver, _Undefined):
+            return implementation(**kwargs)
+        return implementation(receiver, *args, **kwargs)
+
+    @overload
+    def __get__(
+        self, instance: None, owner: type[object] | None = None
+    ) -> Implementation[S, P, R]: ...
+
+    @overload
+    def __get__(
+        self: Implementation[_NoReceiver, P, R],
+        instance: object,
+        owner: type[object] | None = None,
+    ) -> _BoundImplementation[_NoReceiver, P, R]: ...
+
+    @overload
+    def __get__(
+        self, instance: S, owner: type[object] | None = None
+    ) -> _BoundImplementation[S, P, R]: ...
+
+    @overload
+    def __get__(
+        self, instance: object, owner: type[object] | None = None
+    ) -> Callable[Concatenate[S, P], R]: ...
 
     def __get__(
-        self, instance: object | None, owner: type[Any] | None = None
-    ) -> _BoundImplementation[P, R]:
+        self, instance: object | None, owner: type[object] | None = None
+    ) -> object:
+        if instance is None and not isinstance(self.implementation, classmethod):
+            return self
         return _BoundImplementation(self, instance, owner)
 
     @overload
     def add(
-        self, *, default: bool = False
-    ) -> Callable[[Any], Implementation[P, R]]: ...
+        self: Implementation[_NoReceiver, P, R],
+        implementation: Callable[P, R]
+        | Callable[Concatenate[type[Owner], P], R]
+        | classmethod[Owner, P, R]
+        | staticmethod[P, R],
+        *,
+        default: bool = False,
+    ) -> Implementation[_NoReceiver, P, R]: ...
+
     @overload
     def add(
         self,
-        implementation: Any,
+        implementation: Callable[Concatenate[S, P], R] | Implementation[S, P, R],
         *,
         default: bool = False,
-    ) -> Implementation[P, R]: ...
+    ) -> Implementation[S, P, R]: ...
+
+    @overload
+    def add(
+        self, *, default: bool = False
+    ) -> Callable[
+        [Callable[..., R] | classmethod[Owner, P, R] | staticmethod[P, R]],
+        Implementation[S, P, R],
+    ]: ...
 
     def add(
         self,
-        implementation: Any = _UNDEFINED_VALUE,
+        implementation: object = _UNDEFINED_VALUE,
         *,
         default: bool = False,
-    ) -> Implementation[P, R] | Callable[[Any], Implementation[P, R]]:
+    ) -> object:
         """Add an alternative implementation."""
         if isinstance(implementation, _Undefined):
             return self.alternatives.add(default=default)
-        return self.alternatives.add(implementation, default=default)
+        add = cast(Callable[..., object], self.alternatives.add)
+        return add(implementation, default=default)
+
+
+@overload
+def reference(*, default: bool = False) -> _ReferenceDecorator: ...
 
 
 @overload
 def reference(
-    *, default: bool = False
-) -> Callable[[Callable[P, R]], Alternatives[P, R]]: ...
+    implementation: classmethod[Owner, P, R], *, default: bool = False
+) -> Alternatives[_NoReceiver, P, R]: ...
 
 
 @overload
 def reference(
-    implementation: Callable[P, R] | _Descriptor, *, default: bool = False
-) -> Alternatives[P, R]: ...
+    implementation: staticmethod[P, R], *, default: bool = False
+) -> Alternatives[_NoReceiver, P, R]: ...
 
 
 @overload
 def reference(
-    implementation: Any, *, default: bool = False
-) -> Alternatives[Any, Any]: ...
-
-
-def reference(
-    implementation: Any = _UNDEFINED_VALUE,
+    implementation: Callable[Concatenate[type[Owner], P], R],
     *,
     default: bool = False,
-) -> Alternatives[Any, Any] | Callable[[Any], Alternatives[Any, Any]]:
+) -> Alternatives[_NoReceiver, P, R]: ...
+
+
+@overload
+def reference(
+    implementation: Callable[Concatenate[S, P], R], *, default: bool = False
+) -> Alternatives[S, P, R]: ...
+
+
+@overload
+def reference(
+    implementation: Callable[P, R], *, default: bool = False
+) -> Alternatives[_NoReceiver, P, R]: ...
+
+
+def reference(
+    implementation: object = _UNDEFINED_VALUE,
+    *,
+    default: bool = False,
+) -> object:
     if isinstance(implementation, _Undefined):
 
-        def inner(f: Any) -> Alternatives[Any, Any]:
+        def inner(f: object) -> object:
             """Add the reference implementation to the alternatives"""
-            return Alternatives(f, default=default)
+            return Alternatives(
+                cast(Callable[..., object] | _TypedDescriptor[..., object], f),
+                default=default,
+            )
 
-        return inner
+        return cast(_ReferenceDecorator, inner)
     else:
-        return Alternatives(implementation, default=default)
+        return Alternatives(
+            cast(Callable[..., object] | _TypedDescriptor[..., object], implementation),
+            default=default,
+        )

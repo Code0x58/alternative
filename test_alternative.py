@@ -1,10 +1,11 @@
 import re
+from inspect import signature
+from typing import Callable, cast
 from unittest.mock import MagicMock
 
 import pytest
 
 import alternative
-from inspect import signature
 
 
 def imp_for_cmp(imp: alternative.Implementation | None) -> dict | None:
@@ -39,9 +40,9 @@ def test_add_happy_path():
 
 def test_coupled_signatures():
     """The signatures of reference, Alternative.add, and Implementation.add are aligned."""
-    ref_sig = signature(alternative.reference)  # pyrefly: ignore
-    alt_sig = signature(alternative.Alternatives.add)  # pyrefly: ignore
-    imp_sig = signature(alternative.Implementation.add)  # pyrefly: ignore
+    ref_sig = signature(cast(Callable[..., object], alternative.reference))
+    alt_sig = signature(cast(Callable[..., object], alternative.Alternatives.add))
+    imp_sig = signature(cast(Callable[..., object], alternative.Implementation.add))
     assert alt_sig.parameters == imp_sig.parameters
     # skip the self-parameter to give matching signatures
     assert (
@@ -343,7 +344,7 @@ def test_implementation_repr_without_label(monkeypatch):
     )
 
 
-def test_instance_method_binding():
+def test_instance_method_binding() -> None:
     """Alternatives bind instance methods through descriptor access."""
 
     class Calculator:
@@ -370,10 +371,14 @@ def test_instance_method_binding():
     assert Calculator.add(calculator, 5) == ("default", 15)
     assert Calculator.add_extra(calculator, 5) == ("extra", 15)
     assert calculator.add_extra.alternatives is Calculator.__dict__["add"]
-    assert Calculator.__dict__["add"].__get__(calculator)(5) == ("default", 15)
+    descriptor = cast(
+        alternative.Alternatives[Calculator, [int], tuple[str, int]],
+        Calculator.__dict__["add"],
+    )
+    assert descriptor.__get__(calculator)(5) == ("default", 15)
 
 
-def test_classmethod_binding():
+def test_classmethod_binding() -> None:
     """Alternatives bind classmethod implementations to the owner class."""
 
     class Factory:
@@ -405,7 +410,7 @@ def test_classmethod_binding():
     assert ChildFactory.build_extra("a") == ("extra", "ChildFactory", "a")
 
 
-def test_staticmethod_binding():
+def test_staticmethod_binding() -> None:
     """Alternatives preserve staticmethod binding from class and instance access."""
 
     class Parser:
@@ -430,7 +435,7 @@ def test_staticmethod_binding():
     assert Parser.parse_extra("x") == ("extra", "x")
 
 
-def test_bound_attribute_access_does_not_freeze_implementations():
+def test_bound_attribute_access_does_not_freeze_implementations() -> None:
     """Accessing a method alternative does not freeze registrations before invocation."""
 
     class Counter:
@@ -445,3 +450,29 @@ def test_bound_attribute_access_does_not_freeze_implementations():
         return 2
 
     assert bound_value() == 2
+
+
+def test_bound_method_registration_delegates_to_alternatives() -> None:
+    """Bound alternatives expose registration and metadata without dynamic attribute typing."""
+
+    class Counter:
+        @alternative.reference
+        def value(self) -> int:
+            return 1
+
+    counter = Counter()
+
+    @counter.value.add(default=True)
+    def value_default(self) -> int:
+        return 2
+
+    @value_default.__get__(counter, type(counter)).add
+    def value_extra(self) -> int:
+        return 3
+
+    assert counter.value.implementations == Counter.__dict__["value"].implementations
+    assert counter.value.reference is Counter.__dict__["value"].reference
+    assert counter.value.callable is Counter.__dict__["value"].callable
+    assert counter.value() == 2
+    assert value_default.__get__(counter, type(counter))() == 2
+    assert value_extra(counter) == 3
