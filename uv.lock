@@ -34,6 +34,7 @@ dev = [
     { name = "pytest-benchmark" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "typing-extensions" },
 ]
 docs = [
     { name = "sphinx" },
@@ -53,6 +54,7 @@ dev = [
     { name = "mypy", specifier = ">=2.0.0" },
     { name = "pyrefly", specifier = ">=0.64.1" },
     { name = "ruff", specifier = ">=0.15.12" },
+    { name = "typing-extensions", specifier = ">=4.15.0" },
 ]
 docs = [
     { name = "sphinx", specifier = ">=8.1.3" },
