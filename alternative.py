@@ -431,7 +431,7 @@ def reference[**P, R](
 
 
 @overload
-def reference[**P, R](
+def reference[**P, R](  # pyrefly: ignore[inconsistent-overload]
     implementation: Callable[P, R], *, default: bool = False
 ) -> Alternatives[P, R]: ...
 
