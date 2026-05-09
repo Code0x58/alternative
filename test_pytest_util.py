@@ -1,3 +1,5 @@
+import inspect
+
 import alternative
 import pytest
 
@@ -17,9 +19,18 @@ def alt2():
     return 1
 
 
+def _parametrize_values(test_func, arg_name: str):
+    """Return the parameter values configured by pytest.mark.parametrize for an argument."""
+    return [
+        mark.args[1]
+        for mark in test_func.pytestmark
+        if mark.name == "parametrize" and mark.args[0] == arg_name
+    ]
+
+
 @f.pytest_parametrize_pairs
 def test_f(reference, implementation):
-    # FIXME: check the use of parameters is correct + decorator use
+    """Default pair parametrization compares each implementation with the reference."""
     assert reference() == implementation()
 
 
@@ -54,39 +65,54 @@ def test_select_parametrize_implementations(only_default: bool):
         ]
 
 
-@pytest.mark.parametrize(
-    ("only_default", "double_reference"),
-    [(False, False), (False, True), (True, False), (True, True)],
-)
-def test_select_parametrize_pairs(only_default: bool, double_reference: bool):
-    """The selected pair callables preserve reference inclusion and exclusions."""
+@pytest.mark.parametrize("only_default", [False, True])
+@pytest.mark.parametrize("double_reference", [False, True])
+def test_pytest_parametrize_pairs_signature_and_parameters(
+    only_default: bool, double_reference: bool
+):
+    """Pair parametrization preserves signature and selects expected reference/implementation values."""
 
     @alternative.reference
-    def reference_impl():
-        return 1
+    def reference_impl(x: int, y: int = 0) -> int:
+        return x + y
 
     @reference_impl.add(default=True)
-    def default_impl():
-        return 2
+    def default_impl(x: int, y: int = 0) -> int:
+        return x + y
 
     @reference_impl.add
-    def extra_impl():
-        return 3
+    def extra_impl(x: int, y: int = 0) -> int:
+        return x + y
 
-    reference_wrapper = lambda: None  # noqa: E731
-    selected = reference_impl._select_parametrize_pairs(  # pyrefly: ignore
-        reference_implementation=reference_wrapper,
+    def pair_test(reference, implementation, x: int, y: int = 0):
+        return reference(x, y) == implementation(x, y)
+
+    decorated = reference_impl.pytest_parametrize_pairs(
+        pair_test,
         only_default=only_default,
         double_reference=double_reference,
     )
+
+    assert inspect.signature(decorated) == inspect.signature(pair_test)
+
+    reference_values = _parametrize_values(decorated, "reference")
+    implementation_values = _parametrize_values(decorated, "implementation")
+    assert len(reference_values) == 1
+    assert len(reference_values[0]) == 1
+
+    implementation_names = [func.__name__ for func in implementation_values[0]]
+    expected_implementations = (
+        ["default_impl"] if only_default else ["default_impl", "extra_impl"]
+    )
+    if double_reference:
+        expected_implementations = ["reference_impl", *expected_implementations]
+    assert implementation_names == expected_implementations
+    assert len(implementation_values[0]) == len(expected_implementations)
+
+    reference_callable = reference_values[0][0]
     default_callable = default_impl.implementation
     extra_callable = extra_impl.implementation
 
-    if only_default and double_reference:
-        assert selected == [reference_wrapper, default_callable]
-    elif only_default:
-        assert selected == [default_callable]
-    elif double_reference:
-        assert selected == [reference_wrapper, default_callable, extra_callable]
-    else:
-        assert selected == [default_callable, extra_callable]
+    assert decorated(reference_callable, default_callable, 2, y=3)
+    if "extra_impl" in expected_implementations:
+        assert decorated(reference_callable, extra_callable, 2, y=3)
