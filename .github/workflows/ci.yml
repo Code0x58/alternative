@@ -51,7 +51,6 @@ jobs:
 
       - name: Mypy type check
         run: uv run --dev mypy .
-        continue-on-error: true
 
       - name: Run tests
         run: |
