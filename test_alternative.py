@@ -293,3 +293,22 @@ def test_implementation_label_safe_when_caller_unavailable(monkeypatch):
         return 1
 
     assert f.reference.label == "<unknown module>.<unknown> (<unknown location>)"
+
+
+def test_implementation_repr_without_label(monkeypatch):
+    """Implementation repr omits label when no label metadata is available."""
+    monkeypatch.setattr(alternative, "DEBUG", False)
+
+    @alternative.reference
+    def f():
+        return 1
+
+    @f.add
+    def alt():
+        return 2
+
+    assert alt.label is None
+    assert (
+        repr(alt)
+        == "Implementation(test_implementation_repr_without_label.<locals>.alt)"
+    )
