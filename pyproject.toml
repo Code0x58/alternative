@@ -36,6 +36,9 @@ dev = [
 [tool.uv]
 dev-dependencies = [
     "alternative[dev]",
+    "mypy>=2.0.0",
+    "pyrefly>=0.64.1",
+    "ruff>=0.15.12",
 ]
 
 [tool.uv.sources]
