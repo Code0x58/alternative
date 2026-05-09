@@ -46,10 +46,11 @@ jobs:
         run: uv run --dev ruff check .
         continue-on-error: true
 
-      - name: Type check
-        run: |
-          uv run --dev pyrefly check .
-          uv run --dev mypy .
+      - name: Pyrefly type check
+        run: uv run --dev pyrefly check .
+
+      - name: Mypy type check
+        run: uv run --dev mypy .
         continue-on-error: true
 
       - name: Run tests
