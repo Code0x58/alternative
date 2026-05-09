@@ -38,8 +38,12 @@ class _SupportsLessThan(Protocol):
 _UNDEFINED_VALUE = _UNDEFINED()
 
 type ImplementationSig[**P, R] = Callable[P, R] | Implementation[P, R]
-type AlternativesWrapper[**P, R] = Callable[[ImplementationSig], Alternatives[P, R]]
-type ImplementationWrapper[**P, R] = Callable[[ImplementationSig], Implementation[P, R]]
+type AlternativesWrapper[**P, R] = Callable[
+    [ImplementationSig[P, R]], Alternatives[P, R]
+]
+type ImplementationWrapper[**P, R] = Callable[
+    [ImplementationSig[P, R]], Implementation[P, R]
+]
 
 
 class AlternativeError(Exception):
@@ -423,7 +427,7 @@ class Implementation[**P, R]:
 @overload
 def reference[**P, R](
     implementation: _UNDEFINED = _UNDEFINED_VALUE, *, default: bool = False
-) -> AlternativesWrapper[P, R]: ...
+) -> Callable[[Callable[P, R]], Alternatives[P, R]]: ...
 
 
 @overload
@@ -434,7 +438,7 @@ def reference[**P, R](
 
 def reference[**P, R](
     implementation=_UNDEFINED_VALUE, *, default=False
-) -> Alternatives[P, R] | AlternativesWrapper[P, R]:
+) -> Alternatives[P, R] | Callable[[Callable[P, R]], Alternatives[P, R]]:
     if isinstance(implementation, _UNDEFINED):
 
         def inner(f: Callable[P, R]) -> Alternatives[P, R]:
