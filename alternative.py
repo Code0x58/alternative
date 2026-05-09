@@ -17,10 +17,21 @@ DEBUG = os.environ.get("ALTERNATIVE_DEBUG", "0").lower() in (
 )
 
 
+__all__ = [
+    "reference",
+    "Alternatives",
+    "Implementation",
+    "AlternativeError",
+    "AddTooLateError",
+    "MultipleDefaultsError",
+    "CrossAlternativesImplementationError",
+]
+
+
 class _UNDEFINED: ...
 
 
-UNDEFINED = _UNDEFINED()
+_UNDEFINED_VALUE = _UNDEFINED()
 
 type ImplementationSig[**P, R] = Callable[P, R] | Implementation[P, R]
 type AlternativesWrapper[**P, R] = Callable[[ImplementationSig], Alternatives[P, R]]
@@ -31,19 +42,19 @@ class AlternativeError(Exception):
     """Base class for all alternative errors."""
 
 
-class AddTooLate(AlternativeError):
+class AddTooLateError(AlternativeError):
     """Cannot add implementations after the alternatives have been invoked."""
 
 
-class MultipleDefaults(AlternativeError):
+class MultipleDefaultsError(AlternativeError):
     """Cannot set the default implementation more than once."""
 
 
-class CrossAlternativesImplementation(AlternativeError):
+class CrossAlternativesImplementationError(AlternativeError):
     """Cannot add an Implementation object that belongs to a different Alternatives set."""
 
 
-def get_caller_path() -> str | None:
+def _get_caller_path() -> str | None:
     """
     Return 'module.QualName (file.py:line)' pointing to the line
     that invoked the caller of this function.
@@ -75,16 +86,16 @@ def get_caller_path() -> str | None:
     return f"{module}.{qualname} ({location})"
 
 
-def maybe_get_caller_path() -> str | None:
+def _maybe_get_caller_path() -> str | None:
     """Return the call site if DEBUG is True, otherwise None."""
     if DEBUG:
-        return get_caller_path()
+        return _get_caller_path()
     return None
 
 
 class Alternatives[**P, R]:
     def __init__(self, implementation: Callable[P, R], *, default: bool = False):
-        imp = Implementation(self, implementation, label=maybe_get_caller_path())
+        imp = Implementation(self, implementation, label=_maybe_get_caller_path())
         self.reference = imp
         # tracks the active implementation
         self._default: Implementation[P, R] | None = None
@@ -107,7 +118,7 @@ class Alternatives[**P, R]:
 
     @overload
     def add(
-        self, implementation: _UNDEFINED = UNDEFINED, *, default: bool = False
+        self, implementation: _UNDEFINED = _UNDEFINED_VALUE, *, default: bool = False
     ) -> ImplementationWrapper[P, R]: ...
     @overload
     def add(
@@ -116,7 +127,7 @@ class Alternatives[**P, R]:
 
     def add(
         self,
-        implementation=UNDEFINED,
+        implementation=_UNDEFINED_VALUE,
         *,
         default=False,
     ) -> Implementation[P, R] | ImplementationWrapper[P, R]:
@@ -126,7 +137,7 @@ class Alternatives[**P, R]:
                 msg = f"added implementation after first invocation at {self._debug_implementations_used}"
             else:
                 msg = None
-            raise AddTooLate(msg)
+            raise AddTooLateError(msg)
 
         if isinstance(implementation, _UNDEFINED):
 
@@ -137,11 +148,11 @@ class Alternatives[**P, R]:
 
             return cast(ImplementationWrapper[P, R], wrapper)
 
-        label = maybe_get_caller_path()
+        label = _maybe_get_caller_path()
         if not isinstance(implementation, Implementation):
             imp = Implementation(self, implementation, label=label)
         elif implementation.alternatives is not self:
-            raise CrossAlternativesImplementation(
+            raise CrossAlternativesImplementationError(
                 f"Cannot add {implementation!r} to {self.reference!r}; "
                 "it belongs to a different Alternatives set. "
                 "Pass implementation.implementation to clone explicitly."
@@ -156,10 +167,10 @@ class Alternatives[**P, R]:
                     msg = f"first default was specified at {self._debug_default}; existing default={self._default!r}"
                 else:
                     msg = None
-                raise MultipleDefaults(msg)
+                raise MultipleDefaultsError(msg)
             # there is the AddTooLate guard above which stops setting of a default after invocation - see test_default_after_invocation
             self._default = imp
-            self._debug_default = maybe_get_caller_path()
+            self._debug_default = _maybe_get_caller_path()
 
         self._implementations.append(imp)
         return imp
@@ -175,7 +186,7 @@ class Alternatives[**P, R]:
                 self._callable = self._default.implementation
             else:
                 self._callable = self.reference
-            self._debug_callable_used = maybe_get_caller_path()
+            self._debug_callable_used = _maybe_get_caller_path()
             self.__call__ = self._callable
             # access the list of implementations to freeze them
             assert self.implementations
@@ -185,7 +196,7 @@ class Alternatives[**P, R]:
     def implementations(self) -> list[Implementation[P, R]]:
         if not self._implementations_used:
             self._implementations_used = True
-            self._debug_implementations_used = maybe_get_caller_path()
+            self._debug_implementations_used = _maybe_get_caller_path()
         return self._implementations
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
@@ -215,7 +226,7 @@ class Alternatives[**P, R]:
     @overload
     def pytest_parametrize(
         self,
-        test: _UNDEFINED = UNDEFINED,
+        test: _UNDEFINED = _UNDEFINED_VALUE,
         *,
         only_default: bool = False,
     ): ...
@@ -228,7 +239,7 @@ class Alternatives[**P, R]:
     ): ...
     def pytest_parametrize(
         self,
-        test=UNDEFINED,
+        test=_UNDEFINED_VALUE,
         *,
         only_default: bool = False,
     ):
@@ -260,7 +271,7 @@ class Alternatives[**P, R]:
     @overload
     def pytest_parametrize_pairs(
         self,
-        test: _UNDEFINED = UNDEFINED,
+        test: _UNDEFINED = _UNDEFINED_VALUE,
         *,
         n_cache: int | None = 0,
         double_reference: bool = False,
@@ -278,7 +289,7 @@ class Alternatives[**P, R]:
 
     def pytest_parametrize_pairs(
         self,
-        test=UNDEFINED,
+        test=_UNDEFINED_VALUE,
         *,
         n_cache=0,
         double_reference=False,
@@ -368,7 +379,7 @@ class Implementation[**P, R]:
 
     def __post_init__(self):
         if self.label is None:
-            self.label = maybe_get_caller_path()
+            self.label = _maybe_get_caller_path()
 
     def __repr__(self) -> str:
         implementation_name = getattr(
@@ -384,7 +395,7 @@ class Implementation[**P, R]:
 
     @overload
     def add(
-        self, implementation: _UNDEFINED = UNDEFINED, *, default: bool = False
+        self, implementation: _UNDEFINED = _UNDEFINED_VALUE, *, default: bool = False
     ) -> ImplementationWrapper[P, R]: ...
     @overload
     def add(
@@ -392,7 +403,7 @@ class Implementation[**P, R]:
     ) -> Implementation[P, R]: ...
 
     def add(
-        self, implementation=UNDEFINED, *, default=False
+        self, implementation=_UNDEFINED_VALUE, *, default=False
     ) -> Implementation[P, R] | ImplementationWrapper[P, R]:
         """Add an alternative implementation."""
         return self.alternatives.add(implementation, default=default)
@@ -400,7 +411,7 @@ class Implementation[**P, R]:
 
 @overload
 def reference[**P, R](
-    implementation: _UNDEFINED = UNDEFINED, *, default: bool = False
+    implementation: _UNDEFINED = _UNDEFINED_VALUE, *, default: bool = False
 ) -> AlternativesWrapper[P, R]: ...
 
 
@@ -411,7 +422,7 @@ def reference[**P, R](
 
 
 def reference[**P, R](
-    implementation=UNDEFINED, *, default=False
+    implementation=_UNDEFINED_VALUE, *, default=False
 ) -> Alternatives[P, R] | AlternativesWrapper[P, R]:
     if isinstance(implementation, _UNDEFINED):
 

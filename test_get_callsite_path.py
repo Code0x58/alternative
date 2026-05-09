@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from alternative import get_caller_path
+from alternative import _get_caller_path
 
 MODULE = __name__
 FALLBACK = "<unknown module>.<unknown> (<unknown location>)"
@@ -15,7 +15,7 @@ def test_callsite_normal(request: pytest.FixtureRequest):
 
     def level1():
         def level2():
-            return get_caller_path()
+            return _get_caller_path()
 
         return level2()
 
@@ -35,5 +35,5 @@ def test_callsite_no_two_up(monkeypatch):
     # Monkeypatch currentframe to return our fake
     monkeypatch.setattr(inspect, "currentframe", lambda: fake_frame_top)
 
-    path = get_caller_path()
+    path = _get_caller_path()
     assert path == FALLBACK
