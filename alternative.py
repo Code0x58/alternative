@@ -432,12 +432,14 @@ def reference[**P, R](
 
 @overload
 def reference[**P, R](
-    implementation: ImplementationSig[P, R], *, default: bool = False
+    implementation: Callable[P, R], *, default: bool = False
 ) -> Alternatives[P, R]: ...
 
 
 def reference[**P, R](
-    implementation=_UNDEFINED_VALUE, *, default=False
+    implementation=_UNDEFINED_VALUE,
+    *,
+    default=False,
 ) -> Alternatives[P, R] | Callable[[Callable[P, R]], Alternatives[P, R]]:
     if isinstance(implementation, _UNDEFINED):
 
