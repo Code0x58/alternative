@@ -151,7 +151,7 @@ class Alternatives[**P, R]:
             raise AddTooLate(msg)
 
         if isinstance(implementation, _UNDEFINED):
-            # FIXME: handle when implementation is for a different set of alternatives
+
             def wrapper(
                 implementation: ImplementationSig[P, R],
             ) -> Implementation[P, R]:
