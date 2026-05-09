@@ -11,5 +11,6 @@ The repository defines testing via GitHub actions. When contributing:
 * Format code with `uv run --dev ruff format .` before committing.
 * Keep the documentation in `docs/` up to date with user-facing behavior, API, and workflow changes. Documentation must compile without warnings.
 * Keep `alternative.py` strictly typed: do not use `typing.Any` or `Any`, and do not add mypy or pyrefly suppression comments. Fix the annotations so public decorators remain transparent to type checkers and IDEs.
+* For PyCharm-specific typing regressions, verify `typing_tests/type_probes.py` with `scripts/pycharm-type-probes.sh`. The script must produce no output when the probe file is clean.
 * Any change to branching paths in `alternative.py` must be followed by a branch coverage run and review for material missing runtime coverage using `uv run --dev pytest --cov=alternative --cov-branch --cov-report=term-missing:skip-covered`.
 * Name tests and functions in `snake_case` and give them triple-quoted docstrings similar to the current codebase.

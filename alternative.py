@@ -4,6 +4,7 @@ import dataclasses
 import inspect
 import os
 from functools import wraps, lru_cache
+from types import FrameType
 from typing import (
     Callable,
     Concatenate,
@@ -11,6 +12,7 @@ from typing import (
     Generic,
     ParamSpec,
     Protocol,
+    Type,
     TypeVar,
     cast,
     overload,
@@ -54,6 +56,13 @@ M = TypeVar("M")
 S = TypeVar("S")
 Owner = TypeVar("Owner")
 F = TypeVar("F", bound=Callable[..., object])
+# These arity variables keep callable wrappers transparent in IDEs that do not
+# fully resolve ParamSpec-based __call__ methods.
+A1 = TypeVar("A1")
+A2 = TypeVar("A2")
+A3 = TypeVar("A3")
+A4 = TypeVar("A4")
+A5 = TypeVar("A5")
 
 
 class _NoReceiver:
@@ -62,24 +71,14 @@ class _NoReceiver:
 
 class _TypedDescriptor(Protocol[P, R_co]):
     def __get__(
-        self, instance: object | None, owner: type[object] | None = None, /
+        self, instance: object | None, owner: Type[object] | None = None, /
     ) -> Callable[P, R_co]: ...
 
 
 class _ReferenceDecorator(Protocol):
     @overload
     def __call__(
-        self, implementation: classmethod[Owner, P, R], /
-    ) -> Alternatives[_NoReceiver, P, R]: ...
-
-    @overload
-    def __call__(
-        self, implementation: staticmethod[P, R], /
-    ) -> Alternatives[_NoReceiver, P, R]: ...
-
-    @overload
-    def __call__(
-        self, implementation: Callable[Concatenate[type[Owner], P], R], /
+        self, implementation: Callable[Concatenate[Type[Owner], P], R], /
     ) -> Alternatives[_NoReceiver, P, R]: ...
 
     @overload
@@ -109,6 +108,13 @@ class CrossAlternativesImplementationError(AlternativeError):
     """Cannot add an Implementation object that belongs to a different Alternatives set."""
 
 
+def _frame_back(frame: FrameType | None) -> FrameType | None:
+    """Return the previous frame when frame inspection is available."""
+    if frame is None:
+        return None
+    return frame.f_back
+
+
 def _get_caller_path() -> str | None:
     """
     Return 'module.QualName (file.py:line)' pointing to the line
@@ -118,18 +124,13 @@ def _get_caller_path() -> str | None:
     """
     frame = inspect.currentframe()
     # Walk back two frames: 0=this, 1=caller, 2=caller of caller
-    if not frame or not frame.f_back:
-        caller = None  # no two-up frame
-    else:
-        caller = frame.f_back.f_back
+    caller = _frame_back(_frame_back(frame))
 
-    # walk though any frames that are in the current file as they will not be helpful
-    while caller is None or caller.f_code.co_filename == __file__:
-        # a bit of a jiggly approach of handling caller being None to make type checking easier and help coverage
-        if caller:
-            caller = caller.f_back
-        if caller is None:
-            return "<unknown module>.<unknown> (<unknown location>)"
+    # Walk through frames in this file, since they are not useful call sites.
+    while caller is not None and caller.f_code.co_filename == __file__:
+        caller = _frame_back(caller)
+    if caller is None:
+        return "<unknown module>.<unknown> (<unknown location>)"
     code = caller.f_code
     module = caller.f_globals.get("__name__", "<unknown module>")
     qualname = getattr(code, "co_qualname", code.co_name)
@@ -151,7 +152,7 @@ def _maybe_get_caller_path() -> str | None:
 def _bind_implementation(
     implementation: Callable[..., R] | _TypedDescriptor[P, R],
     instance: object | None,
-    owner: type[object] | None,
+    owner: Type[object] | None,
 ) -> Callable[..., R]:
     """Bind an implementation using descriptor semantics when available."""
     if owner is None and instance is not None:
@@ -166,9 +167,53 @@ def _bind_implementation(
 class _BoundAlternatives(Generic[S, P, R]):
     alternatives: Alternatives[S, P, R]
     instance: object | None
-    owner: type[object] | None
+    owner: Type[object] | None
 
-    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
+    @overload
+    def __call__(self: _BoundAlternatives[S, [], R]) -> R: ...
+
+    @overload
+    def __call__(self: _BoundAlternatives[S, [A1], R], arg1: A1, /) -> R: ...
+
+    @overload
+    def __call__(
+        self: _BoundAlternatives[S, [A1, A2], R], arg1: A1, arg2: A2, /
+    ) -> R: ...
+
+    @overload
+    def __call__(
+        self: _BoundAlternatives[S, [A1, A2, A3], R],
+        arg1: A1,
+        arg2: A2,
+        arg3: A3,
+        /,
+    ) -> R: ...
+
+    @overload
+    def __call__(
+        self: _BoundAlternatives[S, [A1, A2, A3, A4], R],
+        arg1: A1,
+        arg2: A2,
+        arg3: A3,
+        arg4: A4,
+        /,
+    ) -> R: ...
+
+    @overload
+    def __call__(
+        self: _BoundAlternatives[S, [A1, A2, A3, A4, A5], R],
+        arg1: A1,
+        arg2: A2,
+        arg3: A3,
+        arg4: A4,
+        arg5: A5,
+        /,
+    ) -> R: ...
+
+    @overload
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R: ...
+
+    def __call__(self, *args: object, **kwargs: object) -> R:
         implementation: Callable[..., R] = _bind_implementation(
             self.alternatives.callable, self.instance, self.owner
         )
@@ -177,10 +222,7 @@ class _BoundAlternatives(Generic[S, P, R]):
     @overload
     def add(
         self: _BoundAlternatives[_NoReceiver, P, R],
-        implementation: Callable[P, R]
-        | Callable[Concatenate[type[Owner], P], R]
-        | classmethod[Owner, P, R]
-        | staticmethod[P, R],
+        implementation: Callable[P, R] | Callable[Concatenate[Type[Owner], P], R],
         *,
         default: bool = False,
     ) -> Implementation[_NoReceiver, P, R]: ...
@@ -197,7 +239,7 @@ class _BoundAlternatives(Generic[S, P, R]):
     def add(
         self, *, default: bool = False
     ) -> Callable[
-        [Callable[..., R] | classmethod[Owner, P, R] | staticmethod[P, R]],
+        [Callable[..., R]],
         Implementation[S, P, R],
     ]: ...
 
@@ -227,9 +269,53 @@ class _BoundAlternatives(Generic[S, P, R]):
 class _BoundImplementation(Generic[S, P, R]):
     implementation: Implementation[S, P, R]
     instance: object | None
-    owner: type[object] | None
+    owner: Type[object] | None
 
-    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
+    @overload
+    def __call__(self: _BoundImplementation[S, [], R]) -> R: ...
+
+    @overload
+    def __call__(self: _BoundImplementation[S, [A1], R], arg1: A1, /) -> R: ...
+
+    @overload
+    def __call__(
+        self: _BoundImplementation[S, [A1, A2], R], arg1: A1, arg2: A2, /
+    ) -> R: ...
+
+    @overload
+    def __call__(
+        self: _BoundImplementation[S, [A1, A2, A3], R],
+        arg1: A1,
+        arg2: A2,
+        arg3: A3,
+        /,
+    ) -> R: ...
+
+    @overload
+    def __call__(
+        self: _BoundImplementation[S, [A1, A2, A3, A4], R],
+        arg1: A1,
+        arg2: A2,
+        arg3: A3,
+        arg4: A4,
+        /,
+    ) -> R: ...
+
+    @overload
+    def __call__(
+        self: _BoundImplementation[S, [A1, A2, A3, A4, A5], R],
+        arg1: A1,
+        arg2: A2,
+        arg3: A3,
+        arg4: A4,
+        arg5: A5,
+        /,
+    ) -> R: ...
+
+    @overload
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R: ...
+
+    def __call__(self, *args: object, **kwargs: object) -> R:
         implementation: Callable[..., R] = _bind_implementation(
             self.implementation.implementation, self.instance, self.owner
         )
@@ -242,10 +328,7 @@ class _BoundImplementation(Generic[S, P, R]):
     @overload
     def add(
         self: _BoundImplementation[_NoReceiver, P, R],
-        implementation: Callable[P, R]
-        | Callable[Concatenate[type[Owner], P], R]
-        | classmethod[Owner, P, R]
-        | staticmethod[P, R],
+        implementation: Callable[P, R] | Callable[Concatenate[Type[Owner], P], R],
         *,
         default: bool = False,
     ) -> Implementation[_NoReceiver, P, R]: ...
@@ -262,7 +345,7 @@ class _BoundImplementation(Generic[S, P, R]):
     def add(
         self, *, default: bool = False
     ) -> Callable[
-        [Callable[..., R] | classmethod[Owner, P, R] | staticmethod[P, R]],
+        [Callable[..., R]],
         Implementation[S, P, R],
     ]: ...
 
@@ -306,10 +389,7 @@ class Alternatives(Generic[S, P, R]):
     @overload
     def add(
         self: Alternatives[_NoReceiver, P, R],
-        implementation: Callable[P, R]
-        | Callable[Concatenate[type[Owner], P], R]
-        | classmethod[Owner, P, R]
-        | staticmethod[P, R],
+        implementation: Callable[P, R] | Callable[Concatenate[Type[Owner], P], R],
         *,
         default: bool = False,
     ) -> Implementation[_NoReceiver, P, R]: ...
@@ -326,7 +406,7 @@ class Alternatives(Generic[S, P, R]):
     def add(
         self, *, default: bool = False
     ) -> Callable[
-        [Callable[..., R] | classmethod[Owner, P, R] | staticmethod[P, R]],
+        [Callable[..., R]],
         Implementation[S, P, R],
     ]: ...
 
@@ -390,16 +470,18 @@ class Alternatives(Generic[S, P, R]):
         """Return the active implementation.
 
         Setting the default implementation is disabled after this is accessed."""
-        if self._callable is None:
+        callable_ = self._callable
+        if callable_ is None:
             # finalise the callable
             if self._default:
-                self._callable = self._default.implementation
+                callable_ = self._default.implementation
             else:
-                self._callable = self.reference
+                callable_ = self.reference
+            self._callable = callable_
             self._debug_callable_used = _maybe_get_caller_path()
             # access the list of implementations to freeze them
             assert self.implementations
-        return self._callable
+        return callable_
 
     @property
     def implementations(self) -> list[Implementation[S, P, R]]:
@@ -407,6 +489,91 @@ class Alternatives(Generic[S, P, R]):
             self._implementations_used = True
             self._debug_implementations_used = _maybe_get_caller_path()
         return self._implementations
+
+    @overload
+    def __call__(self: Alternatives[_NoReceiver, [], R]) -> R: ...
+
+    @overload
+    def __call__(self: Alternatives[_NoReceiver, [A1], R], arg1: A1, /) -> R: ...
+
+    @overload
+    def __call__(
+        self: Alternatives[_NoReceiver, [A1, A2], R], arg1: A1, arg2: A2, /
+    ) -> R: ...
+
+    @overload
+    def __call__(
+        self: Alternatives[_NoReceiver, [A1, A2, A3], R],
+        arg1: A1,
+        arg2: A2,
+        arg3: A3,
+        /,
+    ) -> R: ...
+
+    @overload
+    def __call__(
+        self: Alternatives[_NoReceiver, [A1, A2, A3, A4], R],
+        arg1: A1,
+        arg2: A2,
+        arg3: A3,
+        arg4: A4,
+        /,
+    ) -> R: ...
+
+    @overload
+    def __call__(
+        self: Alternatives[_NoReceiver, [A1, A2, A3, A4, A5], R],
+        arg1: A1,
+        arg2: A2,
+        arg3: A3,
+        arg4: A4,
+        arg5: A5,
+        /,
+    ) -> R: ...
+
+    @overload
+    def __call__(self: Alternatives[S, [], R], receiver: S, /) -> R: ...
+
+    @overload
+    def __call__(self: Alternatives[S, [A1], R], receiver: S, arg1: A1, /) -> R: ...
+
+    @overload
+    def __call__(
+        self: Alternatives[S, [A1, A2], R], receiver: S, arg1: A1, arg2: A2, /
+    ) -> R: ...
+
+    @overload
+    def __call__(
+        self: Alternatives[S, [A1, A2, A3], R],
+        receiver: S,
+        arg1: A1,
+        arg2: A2,
+        arg3: A3,
+        /,
+    ) -> R: ...
+
+    @overload
+    def __call__(
+        self: Alternatives[S, [A1, A2, A3, A4], R],
+        receiver: S,
+        arg1: A1,
+        arg2: A2,
+        arg3: A3,
+        arg4: A4,
+        /,
+    ) -> R: ...
+
+    @overload
+    def __call__(
+        self: Alternatives[S, [A1, A2, A3, A4, A5], R],
+        receiver: S,
+        arg1: A1,
+        arg2: A2,
+        arg3: A3,
+        arg4: A4,
+        arg5: A5,
+        /,
+    ) -> R: ...
 
     @overload
     def __call__(
@@ -433,28 +600,28 @@ class Alternatives(Generic[S, P, R]):
 
     @overload
     def __get__(
-        self, instance: None, owner: type[object] | None = None
+        self, instance: None, owner: Type[object] | None = None
     ) -> Alternatives[S, P, R]: ...
 
     @overload
     def __get__(
         self: Alternatives[_NoReceiver, P, R],
         instance: object,
-        owner: type[object] | None = None,
+        owner: Type[object] | None = None,
     ) -> _BoundAlternatives[_NoReceiver, P, R]: ...
 
     @overload
     def __get__(
-        self, instance: S, owner: type[object] | None = None
+        self, instance: S, owner: Type[object] | None = None
     ) -> _BoundAlternatives[S, P, R]: ...
 
     @overload
     def __get__(
-        self, instance: object, owner: type[object] | None = None
+        self, instance: object, owner: Type[object] | None = None
     ) -> Callable[Concatenate[S, P], R]: ...
 
     def __get__(
-        self, instance: object | None, owner: type[object] | None = None
+        self, instance: object | None, owner: Type[object] | None = None
     ) -> object:
         if instance is None and not self._binds_on_class_access():
             return self
@@ -675,6 +842,91 @@ class Implementation(Generic[S, P, R]):
         return f"Implementation({implementation_name})"
 
     @overload
+    def __call__(self: Implementation[_NoReceiver, [], R]) -> R: ...
+
+    @overload
+    def __call__(self: Implementation[_NoReceiver, [A1], R], arg1: A1, /) -> R: ...
+
+    @overload
+    def __call__(
+        self: Implementation[_NoReceiver, [A1, A2], R], arg1: A1, arg2: A2, /
+    ) -> R: ...
+
+    @overload
+    def __call__(
+        self: Implementation[_NoReceiver, [A1, A2, A3], R],
+        arg1: A1,
+        arg2: A2,
+        arg3: A3,
+        /,
+    ) -> R: ...
+
+    @overload
+    def __call__(
+        self: Implementation[_NoReceiver, [A1, A2, A3, A4], R],
+        arg1: A1,
+        arg2: A2,
+        arg3: A3,
+        arg4: A4,
+        /,
+    ) -> R: ...
+
+    @overload
+    def __call__(
+        self: Implementation[_NoReceiver, [A1, A2, A3, A4, A5], R],
+        arg1: A1,
+        arg2: A2,
+        arg3: A3,
+        arg4: A4,
+        arg5: A5,
+        /,
+    ) -> R: ...
+
+    @overload
+    def __call__(self: Implementation[S, [], R], receiver: S, /) -> R: ...
+
+    @overload
+    def __call__(self: Implementation[S, [A1], R], receiver: S, arg1: A1, /) -> R: ...
+
+    @overload
+    def __call__(
+        self: Implementation[S, [A1, A2], R], receiver: S, arg1: A1, arg2: A2, /
+    ) -> R: ...
+
+    @overload
+    def __call__(
+        self: Implementation[S, [A1, A2, A3], R],
+        receiver: S,
+        arg1: A1,
+        arg2: A2,
+        arg3: A3,
+        /,
+    ) -> R: ...
+
+    @overload
+    def __call__(
+        self: Implementation[S, [A1, A2, A3, A4], R],
+        receiver: S,
+        arg1: A1,
+        arg2: A2,
+        arg3: A3,
+        arg4: A4,
+        /,
+    ) -> R: ...
+
+    @overload
+    def __call__(
+        self: Implementation[S, [A1, A2, A3, A4, A5], R],
+        receiver: S,
+        arg1: A1,
+        arg2: A2,
+        arg3: A3,
+        arg4: A4,
+        arg5: A5,
+        /,
+    ) -> R: ...
+
+    @overload
     def __call__(
         self: Implementation[_NoReceiver, P, R],
         *args: P.args,
@@ -699,28 +951,28 @@ class Implementation(Generic[S, P, R]):
 
     @overload
     def __get__(
-        self, instance: None, owner: type[object] | None = None
+        self, instance: None, owner: Type[object] | None = None
     ) -> Implementation[S, P, R]: ...
 
     @overload
     def __get__(
         self: Implementation[_NoReceiver, P, R],
         instance: object,
-        owner: type[object] | None = None,
+        owner: Type[object] | None = None,
     ) -> _BoundImplementation[_NoReceiver, P, R]: ...
 
     @overload
     def __get__(
-        self, instance: S, owner: type[object] | None = None
+        self, instance: S, owner: Type[object] | None = None
     ) -> _BoundImplementation[S, P, R]: ...
 
     @overload
     def __get__(
-        self, instance: object, owner: type[object] | None = None
+        self, instance: object, owner: Type[object] | None = None
     ) -> Callable[Concatenate[S, P], R]: ...
 
     def __get__(
-        self, instance: object | None, owner: type[object] | None = None
+        self, instance: object | None, owner: Type[object] | None = None
     ) -> object:
         if instance is None and not isinstance(self.implementation, classmethod):
             return self
@@ -729,10 +981,7 @@ class Implementation(Generic[S, P, R]):
     @overload
     def add(
         self: Implementation[_NoReceiver, P, R],
-        implementation: Callable[P, R]
-        | Callable[Concatenate[type[Owner], P], R]
-        | classmethod[Owner, P, R]
-        | staticmethod[P, R],
+        implementation: Callable[P, R] | Callable[Concatenate[Type[Owner], P], R],
         *,
         default: bool = False,
     ) -> Implementation[_NoReceiver, P, R]: ...
@@ -749,7 +998,7 @@ class Implementation(Generic[S, P, R]):
     def add(
         self, *, default: bool = False
     ) -> Callable[
-        [Callable[..., R] | classmethod[Owner, P, R] | staticmethod[P, R]],
+        [Callable[..., R]],
         Implementation[S, P, R],
     ]: ...
 
@@ -767,24 +1016,8 @@ class Implementation(Generic[S, P, R]):
 
 
 @overload
-def reference(*, default: bool = False) -> _ReferenceDecorator: ...
-
-
-@overload
 def reference(
-    implementation: classmethod[Owner, P, R], *, default: bool = False
-) -> Alternatives[_NoReceiver, P, R]: ...
-
-
-@overload
-def reference(
-    implementation: staticmethod[P, R], *, default: bool = False
-) -> Alternatives[_NoReceiver, P, R]: ...
-
-
-@overload
-def reference(
-    implementation: Callable[Concatenate[type[Owner], P], R],
+    implementation: Callable[Concatenate[Type[Owner], P], R],
     *,
     default: bool = False,
 ) -> Alternatives[_NoReceiver, P, R]: ...
@@ -802,6 +1035,10 @@ def reference(
 ) -> Alternatives[_NoReceiver, P, R]: ...
 
 
+@overload
+def reference(*, default: bool = False) -> _ReferenceDecorator: ...
+
+
 def reference(
     implementation: object = _UNDEFINED_VALUE,
     *,
@@ -816,7 +1053,7 @@ def reference(
                 default=default,
             )
 
-        return cast(_ReferenceDecorator, inner)
+        return cast(_ReferenceDecorator, cast(object, inner))
     else:
         return Alternatives(
             cast(Callable[..., object] | _TypedDescriptor[..., object], implementation),
