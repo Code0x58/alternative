@@ -17,14 +17,7 @@ dev = [
     "pytest>=8.3.5",
     "alternative",
     "pytest-cov>=6.1.1",
-]
-
-[tool.uv]
-dev-dependencies = [
-    "alternative",
-    "pytest>=8.3.5",
-    "pytest-benchmark>=5.1.0",
-    "pytest-cov>=6.1.1",
+    "pytest-ruff>=0.4.1",
 ]
 
 [tool.uv.sources]
