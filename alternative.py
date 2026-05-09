@@ -4,8 +4,17 @@ import dataclasses
 import inspect
 import os
 from functools import wraps, lru_cache
-from typing import Callable, Protocol
-from typing import cast, overload
+from typing import (
+    Any,
+    Callable,
+    Final,
+    Generic,
+    ParamSpec,
+    Protocol,
+    TypeVar,
+    cast,
+    overload,
+)
 
 
 DEBUG = os.environ.get("ALTERNATIVE_DEBUG", "0").lower() in (
@@ -28,22 +37,20 @@ __all__ = [
 ]
 
 
-class _UNDEFINED: ...
+class _Undefined:
+    """Sentinel type used when an optional decorator argument is omitted."""
 
 
 class _SupportsLessThan(Protocol):
     def __lt__(self, other: object, /) -> bool: ...
 
 
-_UNDEFINED_VALUE = _UNDEFINED()
+_UNDEFINED_VALUE: Final = _Undefined()
 
-type ImplementationSig[**P, R] = Callable[P, R] | Implementation[P, R]
-type AlternativesWrapper[**P, R] = Callable[
-    [ImplementationSig[P, R]], Alternatives[P, R]
-]
-type ImplementationWrapper[**P, R] = Callable[
-    [ImplementationSig[P, R]], Implementation[P, R]
-]
+P = ParamSpec("P")
+R = TypeVar("R")
+M = TypeVar("M")
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 class AlternativeError(Exception):
@@ -101,7 +108,7 @@ def _maybe_get_caller_path() -> str | None:
     return None
 
 
-class Alternatives[**P, R]:
+class Alternatives(Generic[P, R]):
     def __init__(self, implementation: Callable[P, R], *, default: bool = False):
         imp = Implementation(self, implementation, label=_maybe_get_caller_path())
         self.reference = imp
@@ -125,19 +132,25 @@ class Alternatives[**P, R]:
 
     @overload
     def add(
-        self, implementation: _UNDEFINED = _UNDEFINED_VALUE, *, default: bool = False
-    ) -> ImplementationWrapper[P, R]: ...
+        self, *, default: bool = False
+    ) -> Callable[[Callable[P, R] | Implementation[P, R]], Implementation[P, R]]: ...
     @overload
     def add(
-        self, implementation: ImplementationSig[P, R], *, default: bool = False
+        self,
+        implementation: Callable[P, R] | Implementation[P, R],
+        *,
+        default: bool = False,
     ) -> Implementation[P, R]: ...
 
     def add(
         self,
-        implementation=_UNDEFINED_VALUE,
+        implementation: Callable[P, R] | _Undefined = _UNDEFINED_VALUE,
         *,
-        default=False,
-    ) -> Implementation[P, R] | ImplementationWrapper[P, R]:
+        default: bool = False,
+    ) -> (
+        Implementation[P, R]
+        | Callable[[Callable[P, R] | Implementation[P, R]], Implementation[P, R]]
+    ):
         if self._implementations_used:
             # avoid surprises from implementation changes after selection/inspection
             if DEBUG:
@@ -146,14 +159,14 @@ class Alternatives[**P, R]:
                 msg = None
             raise AddTooLateError(msg)
 
-        if isinstance(implementation, _UNDEFINED):
+        if isinstance(implementation, _Undefined):
 
             def wrapper(
-                implementation: ImplementationSig[P, R],
+                implementation: Callable[P, R] | Implementation[P, R],
             ) -> Implementation[P, R]:
                 return self.add(implementation, default=default)
 
-            return cast(ImplementationWrapper[P, R], wrapper)
+            return wrapper
 
         label = _maybe_get_caller_path()
         if not isinstance(implementation, Implementation):
@@ -210,7 +223,7 @@ class Alternatives[**P, R]:
         # this method will only be called at most once as self.callable overwrites self.__call__
         return self.callable(*args, **kwargs)
 
-    def measure[M](
+    def measure(
         self, /, operator: Callable[[R], M], *args: P.args, **kwargs: P.kwargs
     ) -> dict[Implementation[P, R], M]:
         """Invoke each implementation with the given parameters, then evaluate their results with the operator.
@@ -241,23 +254,22 @@ class Alternatives[**P, R]:
     @overload
     def pytest_parametrize(
         self,
-        test: _UNDEFINED = _UNDEFINED_VALUE,
         *,
         only_default: bool = False,
-    ): ...
+    ) -> Callable[[F], F]: ...
     @overload
     def pytest_parametrize(
         self,
-        test: Callable,
+        test: F,
         *,
         only_default: bool = False,
-    ): ...
+    ) -> F: ...
     def pytest_parametrize(
         self,
-        test=_UNDEFINED_VALUE,
+        test: F | _Undefined = _UNDEFINED_VALUE,
         *,
         only_default: bool = False,
-    ):
+    ) -> F | Callable[[F], F]:
         """Decorator to parametrise a test function with implementations - always includes the reference implementation.
 
         :param test: Test function to wrap - this is elided if using the decorator syntax.
@@ -265,9 +277,9 @@ class Alternatives[**P, R]:
         """
         import pytest
 
-        if isinstance(test, _UNDEFINED):
+        if isinstance(test, _Undefined):
 
-            def decorator(f: Callable):
+            def decorator(f: F) -> F:
                 return self.pytest_parametrize(f, only_default=only_default)
 
             return decorator
@@ -278,38 +290,37 @@ class Alternatives[**P, R]:
 
         @pytest.mark.parametrize("implementation", implementations)
         @wraps(test)
-        def inner(*args, **kwargs):
+        def inner(*args: Any, **kwargs: Any) -> Any:
             return test(*args, **kwargs)
 
-        return inner
+        return cast(F, inner)
 
     @overload
     def pytest_parametrize_pairs(
         self,
-        test: _UNDEFINED = _UNDEFINED_VALUE,
         *,
         n_cache: int | None = 0,
         double_reference: bool = False,
         only_default: bool = False,
-    ): ...
+    ) -> Callable[[F], F]: ...
     @overload
     def pytest_parametrize_pairs(
         self,
-        test: Callable,
+        test: F,
         *,
         n_cache: int | None = 0,
         double_reference: bool = False,
         only_default: bool = False,
-    ): ...
+    ) -> F: ...
 
     def pytest_parametrize_pairs(
         self,
-        test=_UNDEFINED_VALUE,
+        test: F | _Undefined = _UNDEFINED_VALUE,
         *,
-        n_cache=0,
-        double_reference=False,
-        only_default=False,
-    ):
+        n_cache: int | None = 0,
+        double_reference: bool = False,
+        only_default: bool = False,
+    ) -> F | Callable[[F], F]:
         """Decorator to parametrise a test function with the reference and alternative implementations.
 
         :parameter test: Inner pytest function to parameterise with reference and alternative implementations - this is elided if using the decorator syntax.
@@ -322,9 +333,9 @@ class Alternatives[**P, R]:
         """
         import pytest
 
-        if isinstance(test, _UNDEFINED):
+        if isinstance(test, _Undefined):
 
-            def decorator(f: Callable):
+            def decorator(f: F) -> F:
                 return self.pytest_parametrize_pairs(
                     f,
                     n_cache=n_cache,
@@ -334,8 +345,9 @@ class Alternatives[**P, R]:
 
             return decorator
 
-        reference_implementation = lru_cache(maxsize=n_cache)(
-            self.reference.implementation
+        reference_implementation = cast(
+            Callable[P, R],
+            lru_cache(maxsize=n_cache)(self.reference.implementation),
         )
 
         implementations = self._select_parametrize_pairs(
@@ -347,10 +359,10 @@ class Alternatives[**P, R]:
         @pytest.mark.parametrize("reference", [reference_implementation])
         @pytest.mark.parametrize("implementation", implementations)
         @wraps(test)
-        def inner(*args, **kwargs):
+        def inner(*args: Any, **kwargs: Any) -> Any:
             return test(*args, **kwargs)
 
-        return inner
+        return cast(F, inner)
 
     def _select_parametrize_implementations(
         self, *, only_default: bool
@@ -387,7 +399,7 @@ class Alternatives[**P, R]:
 
 
 @dataclasses.dataclass(unsafe_hash=True)
-class Implementation[**P, R]:
+class Implementation(Generic[P, R]):
     alternatives: Alternatives[P, R]
     implementation: Callable[P, R]
     label: str | None = None
@@ -410,43 +422,54 @@ class Implementation[**P, R]:
 
     @overload
     def add(
-        self, implementation: _UNDEFINED = _UNDEFINED_VALUE, *, default: bool = False
-    ) -> ImplementationWrapper[P, R]: ...
+        self, *, default: bool = False
+    ) -> Callable[[Callable[P, R] | Implementation[P, R]], Implementation[P, R]]: ...
     @overload
     def add(
-        self, implementation: ImplementationSig[P, R], *, default: bool = False
+        self,
+        implementation: Callable[P, R] | Implementation[P, R],
+        *,
+        default: bool = False,
     ) -> Implementation[P, R]: ...
 
     def add(
-        self, implementation=_UNDEFINED_VALUE, *, default=False
-    ) -> Implementation[P, R] | ImplementationWrapper[P, R]:
+        self,
+        implementation: Callable[P, R] | _Undefined = _UNDEFINED_VALUE,
+        *,
+        default: bool = False,
+    ) -> (
+        Implementation[P, R]
+        | Callable[[Callable[P, R] | Implementation[P, R]], Implementation[P, R]]
+    ):
         """Add an alternative implementation."""
+        if isinstance(implementation, _Undefined):
+            return self.alternatives.add(default=default)
         return self.alternatives.add(implementation, default=default)
 
 
 @overload
-def reference[**P, R](
-    implementation: _UNDEFINED = _UNDEFINED_VALUE, *, default: bool = False
+def reference(
+    *, default: bool = False
 ) -> Callable[[Callable[P, R]], Alternatives[P, R]]: ...
 
 
 @overload
-def reference[**P, R](  # pyrefly: ignore[inconsistent-overload]
+def reference(
     implementation: Callable[P, R], *, default: bool = False
 ) -> Alternatives[P, R]: ...
 
 
-def reference[**P, R](
-    implementation=_UNDEFINED_VALUE,
+def reference(
+    implementation: Callable[P, R] | _Undefined = _UNDEFINED_VALUE,
     *,
-    default=False,
+    default: bool = False,
 ) -> Alternatives[P, R] | Callable[[Callable[P, R]], Alternatives[P, R]]:
-    if isinstance(implementation, _UNDEFINED):
+    if isinstance(implementation, _Undefined):
 
         def inner(f: Callable[P, R]) -> Alternatives[P, R]:
             """Add the reference implementation to the alternatives"""
             return Alternatives(f, default=default)
 
-        return cast(AlternativesWrapper[P, R], inner)
+        return inner
     else:
         return Alternatives(implementation, default=default)

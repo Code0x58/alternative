@@ -16,6 +16,8 @@ jobs:
       fail-fast: false
       matrix:
         python-version:
+          - "3.10"
+          - "3.11"
           - "3.12"
           - "3.13"
           - "3.14"
@@ -32,11 +34,7 @@ jobs:
         uses: astral-sh/setup-uv@v1
 
       - name: Install dependencies
-        run: |
-          uv sync --dev
-          uv tool install ruff
-          uv tool install pyrefly
-          uv tool install mypy
+        run: uv sync --dev
 
       - name: Ruff format check
         run: uv run --dev ruff format --check --diff .
@@ -58,7 +56,7 @@ jobs:
           # Unset it so pytest can discover pytest-cov and pytest-benchmark via entry points,
           # which are required by the addopts configured in pyproject.toml.
           unset PYTEST_DISABLE_PLUGIN_AUTOLOAD
-          uv run --dev pytest -vv --cov=alternative --cov-report=xml --junitxml=test-results.xml
+          uv run --dev pytest -vv --cov=alternative --cov-report=xml --cov-fail-under=100 --junitxml=test-results.xml
 
       - name: Upload coverage to Codecov
         if: (success() || hashFiles('coverage.xml') != '') && env.CODECOV_TOKEN != ''
@@ -76,4 +74,3 @@ jobs:
           files: ./test-results.xml
           report_type: test_results
           fail_ci_if_error: true
-
