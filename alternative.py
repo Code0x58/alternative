@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import dataclasses
-import enum
 import inspect
 import os
 from functools import wraps, lru_cache
@@ -83,26 +82,6 @@ def maybe_get_caller_path() -> str | None:
     return None
 
 
-class Mutability(enum.IntEnum):
-    """The mutability of an Alternatives object, for providing consistency.
-
-    The general assumption is that all of these levels should be used for good practice/avoiding surprises. Reducing the
-    maximum effective level allows some flexibility, but probably shouldn't be used and is likely to be removed.
-
-    TODO: deprecate the setting of the maximum effective level
-    TODO: on freezing, self __call__ to underlying callable to speed things up
-    """
-
-    MUTABLE = 0
-    """Implementations can be added and a default can be set - the initial state"""
-    FROZEN_IMPLEMENTATION = 1
-    """Default implementations cannot be added or set - state after the default is set"""
-    FROZEN = 2
-    """No new implementations can be added - state after the first invocation."""
-    # TODO: consider having a flag for "always allow new implementations" or MAX_EFFECTIVE_LEVEL with default that can
-    #  be set on construction
-
-
 class Alternatives[**P, R]:
     def __init__(self, implementation: Callable[P, R], *, default: bool = False):
         imp = Implementation(self, implementation, label=maybe_get_caller_path())
@@ -124,7 +103,6 @@ class Alternatives[**P, R]:
         self._implementations_used: bool = False
         """indicates if the list of implementations has been used though the external API"""
         self._debug_implementations_used: str | None = None
-
         self.add(imp, default=default)
 
     @overload
@@ -143,7 +121,7 @@ class Alternatives[**P, R]:
         default=False,
     ) -> Implementation[P, R] | ImplementationWrapper[P, R]:
         if self._implementations_used:
-            # avoid surprises from the implementation changing, which should be unexpected
+            # avoid surprises from implementation changes after selection/inspection
             if DEBUG:
                 msg = f"added implementation after first invocation at {self._debug_implementations_used}"
             else:
