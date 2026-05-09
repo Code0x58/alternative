@@ -45,6 +45,12 @@ class _SupportsLessThan(Protocol):
     def __lt__(self, other: object, /) -> bool: ...
 
 
+class _Descriptor(Protocol):
+    def __get__(
+        self, instance: object | None, owner: type[Any] | None = None, /
+    ) -> Any: ...
+
+
 _UNDEFINED_VALUE: Final = _Undefined()
 
 P = ParamSpec("P")
@@ -108,8 +114,55 @@ def _maybe_get_caller_path() -> str | None:
     return None
 
 
+def _bind_implementation(
+    implementation: Any,
+    instance: object | None,
+    owner: type[Any] | None,
+) -> Callable[P, R]:
+    """Bind an implementation using descriptor semantics when available."""
+    if owner is None and instance is not None:
+        owner = type(instance)
+
+    descriptor_get = getattr(implementation, "__get__", None)
+    if descriptor_get is not None and owner is not None:
+        return cast(Callable[P, R], descriptor_get(instance, owner))
+    return cast(Callable[P, R], implementation)
+
+
+@dataclasses.dataclass(frozen=True)
+class _BoundAlternatives(Generic[P, R]):
+    alternatives: Alternatives[P, R]
+    instance: object | None
+    owner: type[Any] | None
+
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
+        implementation: Callable[P, R] = _bind_implementation(
+            self.alternatives.callable, self.instance, self.owner
+        )
+        return implementation(*args, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.alternatives, name)
+
+
+@dataclasses.dataclass(frozen=True)
+class _BoundImplementation(Generic[P, R]):
+    implementation: Implementation[P, R]
+    instance: object | None
+    owner: type[Any] | None
+
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
+        implementation: Callable[P, R] = _bind_implementation(
+            self.implementation.implementation, self.instance, self.owner
+        )
+        return implementation(*args, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.implementation, name)
+
+
 class Alternatives(Generic[P, R]):
-    def __init__(self, implementation: Callable[P, R], *, default: bool = False):
+    def __init__(self, implementation: Any, *, default: bool = False):
         imp = Implementation(self, implementation, label=_maybe_get_caller_path())
         self.reference = imp
         # tracks the active implementation
@@ -120,7 +173,7 @@ class Alternatives(Generic[P, R]):
         # tracks the use of the set should be
         self._enumerated = False
 
-        self._callable: Callable[P, R] | None = None
+        self._callable: Any | None = None
         self._debug_callable_used: str | None = None
 
         # beware the order of this depends on the sequence of imports, so may vary between entrypoints
@@ -133,24 +186,21 @@ class Alternatives(Generic[P, R]):
     @overload
     def add(
         self, *, default: bool = False
-    ) -> Callable[[Callable[P, R] | Implementation[P, R]], Implementation[P, R]]: ...
+    ) -> Callable[[Any], Implementation[P, R]]: ...
     @overload
     def add(
         self,
-        implementation: Callable[P, R] | Implementation[P, R],
+        implementation: Any,
         *,
         default: bool = False,
     ) -> Implementation[P, R]: ...
 
     def add(
         self,
-        implementation: Callable[P, R] | _Undefined = _UNDEFINED_VALUE,
+        implementation: Any = _UNDEFINED_VALUE,
         *,
         default: bool = False,
-    ) -> (
-        Implementation[P, R]
-        | Callable[[Callable[P, R] | Implementation[P, R]], Implementation[P, R]]
-    ):
+    ) -> Implementation[P, R] | Callable[[Any], Implementation[P, R]]:
         if self._implementations_used:
             # avoid surprises from implementation changes after selection/inspection
             if DEBUG:
@@ -162,7 +212,7 @@ class Alternatives(Generic[P, R]):
         if isinstance(implementation, _Undefined):
 
             def wrapper(
-                implementation: Callable[P, R] | Implementation[P, R],
+                implementation: Any,
             ) -> Implementation[P, R]:
                 return self.add(implementation, default=default)
 
@@ -196,7 +246,7 @@ class Alternatives(Generic[P, R]):
         return imp
 
     @property
-    def callable(self) -> Callable[P, R]:
+    def callable(self) -> Any:
         """Return the active implementation.
 
         Setting the default implementation is disabled after this is accessed."""
@@ -207,7 +257,6 @@ class Alternatives(Generic[P, R]):
             else:
                 self._callable = self.reference
             self._debug_callable_used = _maybe_get_caller_path()
-            setattr(self, "__call__", self._callable)
             # access the list of implementations to freeze them
             assert self.implementations
         return self._callable
@@ -220,8 +269,13 @@ class Alternatives(Generic[P, R]):
         return self._implementations
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
-        # this method will only be called at most once as self.callable overwrites self.__call__
-        return self.callable(*args, **kwargs)
+        implementation: Callable[P, R] = _bind_implementation(self.callable, None, None)
+        return implementation(*args, **kwargs)
+
+    def __get__(
+        self, instance: object | None, owner: type[Any] | None = None
+    ) -> _BoundAlternatives[P, R]:
+        return _BoundAlternatives(self, instance, owner)
 
     def measure(
         self, /, operator: Callable[[R], M], *args: P.args, **kwargs: P.kwargs
@@ -401,7 +455,7 @@ class Alternatives(Generic[P, R]):
 @dataclasses.dataclass(unsafe_hash=True)
 class Implementation(Generic[P, R]):
     alternatives: Alternatives[P, R]
-    implementation: Callable[P, R]
+    implementation: Any
     label: str | None = None
 
     def __post_init__(self):
@@ -417,30 +471,34 @@ class Implementation(Generic[P, R]):
         return f"Implementation({implementation_name})"
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
-        setattr(self, "__call__", self.implementation)
-        return self.__call__(*args, **kwargs)
+        implementation: Callable[P, R] = _bind_implementation(
+            self.implementation, None, None
+        )
+        return implementation(*args, **kwargs)
+
+    def __get__(
+        self, instance: object | None, owner: type[Any] | None = None
+    ) -> _BoundImplementation[P, R]:
+        return _BoundImplementation(self, instance, owner)
 
     @overload
     def add(
         self, *, default: bool = False
-    ) -> Callable[[Callable[P, R] | Implementation[P, R]], Implementation[P, R]]: ...
+    ) -> Callable[[Any], Implementation[P, R]]: ...
     @overload
     def add(
         self,
-        implementation: Callable[P, R] | Implementation[P, R],
+        implementation: Any,
         *,
         default: bool = False,
     ) -> Implementation[P, R]: ...
 
     def add(
         self,
-        implementation: Callable[P, R] | _Undefined = _UNDEFINED_VALUE,
+        implementation: Any = _UNDEFINED_VALUE,
         *,
         default: bool = False,
-    ) -> (
-        Implementation[P, R]
-        | Callable[[Callable[P, R] | Implementation[P, R]], Implementation[P, R]]
-    ):
+    ) -> Implementation[P, R] | Callable[[Any], Implementation[P, R]]:
         """Add an alternative implementation."""
         if isinstance(implementation, _Undefined):
             return self.alternatives.add(default=default)
@@ -455,18 +513,24 @@ def reference(
 
 @overload
 def reference(
-    implementation: Callable[P, R], *, default: bool = False
+    implementation: Callable[P, R] | _Descriptor, *, default: bool = False
 ) -> Alternatives[P, R]: ...
 
 
+@overload
 def reference(
-    implementation: Callable[P, R] | _Undefined = _UNDEFINED_VALUE,
+    implementation: Any, *, default: bool = False
+) -> Alternatives[Any, Any]: ...
+
+
+def reference(
+    implementation: Any = _UNDEFINED_VALUE,
     *,
     default: bool = False,
-) -> Alternatives[P, R] | Callable[[Callable[P, R]], Alternatives[P, R]]:
+) -> Alternatives[Any, Any] | Callable[[Any], Alternatives[Any, Any]]:
     if isinstance(implementation, _Undefined):
 
-        def inner(f: Callable[P, R]) -> Alternatives[P, R]:
+        def inner(f: Any) -> Alternatives[Any, Any]:
             """Add the reference implementation to the alternatives"""
             return Alternatives(f, default=default)
 

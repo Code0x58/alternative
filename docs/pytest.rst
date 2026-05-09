@@ -85,6 +85,37 @@ Use :meth:`alternative.Alternatives.pytest_parametrize` with
 
 Pytest generates readable parameter names from the underlying function names.
 
+Testing Methods
+---------------
+
+Method alternatives can be tested with the same helpers by passing an explicit
+instance to the parametrized implementation:
+
+.. code-block:: python
+
+   class Counter:
+       def __init__(self, value: int):
+           self.value = value
+
+       @alternative.reference
+       def total(self) -> int:
+           return int(str(self.value))
+
+       @total.add(default=True)
+       def total_fast(self) -> int:
+           return self.value
+
+
+   @Counter.total.pytest_parametrize_pairs()
+   def test_totals_are_equivalent(reference, implementation):
+       """Every method implementation returns the same total."""
+       counter = Counter(3)
+       assert implementation(counter) == reference(counter)
+
+The pytest helpers parametrize callables. They do not change the selected
+default implementation for each test parameter; the library still keeps the
+active implementation stable once it has been used.
+
 Collection Order
 ----------------
 

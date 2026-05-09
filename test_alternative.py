@@ -341,3 +341,107 @@ def test_implementation_repr_without_label(monkeypatch):
         repr(alt)
         == "Implementation(test_implementation_repr_without_label.<locals>.alt)"
     )
+
+
+def test_instance_method_binding():
+    """Alternatives bind instance methods through descriptor access."""
+
+    class Calculator:
+        def __init__(self, offset: int):
+            self.offset = offset
+
+        @alternative.reference
+        def add(self, value: int) -> tuple[str, int]:
+            return ("reference", self.offset + value)
+
+        @add.add(default=True)
+        def add_default(self, value: int) -> tuple[str, int]:
+            return ("default", self.offset + value)
+
+        @add.add
+        def add_extra(self, value: int) -> tuple[str, int]:
+            return ("extra", self.offset + value)
+
+    calculator = Calculator(10)
+
+    assert calculator.add(5) == ("default", 15)
+    assert calculator.add_default(5) == ("default", 15)
+    assert calculator.add_extra(5) == ("extra", 15)
+    assert Calculator.add(calculator, 5) == ("default", 15)
+    assert Calculator.add_extra(calculator, 5) == ("extra", 15)
+    assert calculator.add_extra.alternatives is Calculator.__dict__["add"]
+    assert Calculator.__dict__["add"].__get__(calculator)(5) == ("default", 15)
+
+
+def test_classmethod_binding():
+    """Alternatives bind classmethod implementations to the owner class."""
+
+    class Factory:
+        marker = "Factory"
+
+        @alternative.reference
+        @classmethod
+        def build(cls, value: str) -> tuple[str, str, str]:
+            return ("reference", cls.marker, value)
+
+        @build.add(default=True)
+        @classmethod
+        def build_default(cls, value: str) -> tuple[str, str, str]:
+            return ("default", cls.marker, value)
+
+        @build.add
+        @classmethod
+        def build_extra(cls, value: str) -> tuple[str, str, str]:
+            return ("extra", cls.marker, value)
+
+    class ChildFactory(Factory):
+        marker = "ChildFactory"
+
+    assert Factory.build("a") == ("default", "Factory", "a")
+    assert Factory().build("a") == ("default", "Factory", "a")
+    assert Factory.build_default("a") == ("default", "Factory", "a")
+    assert Factory.build_extra("a") == ("extra", "Factory", "a")
+    assert ChildFactory.build("a") == ("default", "ChildFactory", "a")
+    assert ChildFactory.build_extra("a") == ("extra", "ChildFactory", "a")
+
+
+def test_staticmethod_binding():
+    """Alternatives preserve staticmethod binding from class and instance access."""
+
+    class Parser:
+        @alternative.reference
+        @staticmethod
+        def parse(value: str) -> tuple[str, str]:
+            return ("reference", value)
+
+        @parse.add(default=True)
+        @staticmethod
+        def parse_default(value: str) -> tuple[str, str]:
+            return ("default", value)
+
+        @parse.add
+        @staticmethod
+        def parse_extra(value: str) -> tuple[str, str]:
+            return ("extra", value)
+
+    assert Parser.parse("x") == ("default", "x")
+    assert Parser().parse("x") == ("default", "x")
+    assert Parser.parse_default("x") == ("default", "x")
+    assert Parser.parse_extra("x") == ("extra", "x")
+
+
+def test_bound_attribute_access_does_not_freeze_implementations():
+    """Accessing a method alternative does not freeze registrations before invocation."""
+
+    class Counter:
+        @alternative.reference
+        def value(self) -> int:
+            return 1
+
+    bound_value = Counter().value
+
+    @Counter.value.add(default=True)
+    def value_default(self) -> int:
+        return 2
+
+    assert bound_value() == 2

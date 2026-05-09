@@ -96,3 +96,45 @@ alternatives set. This makes chained registration convenient:
        return int(text)
 
 The three implementations still belong to the same alternatives set.
+
+Use Methods
+-----------
+
+``alternative`` follows Python descriptor binding rules, so the same decorator
+also works on methods. Put ``@alternative.reference`` outside
+``@classmethod`` or ``@staticmethod`` when those decorators are needed:
+
+.. code-block:: python
+
+   class Parser:
+       @alternative.reference
+       def parse(self, value: str) -> int:
+           return int(value.strip())
+
+       @parse.add(default=True)
+       def parse_fast(self, value: str) -> int:
+           return int(value)
+
+       @alternative.reference
+       @classmethod
+       def from_text(cls, value: str) -> "Parser":
+           return cls(value.strip())
+
+       @from_text.add(default=True)
+       @classmethod
+       def from_text_fast(cls, value: str) -> "Parser":
+           return cls(value)
+
+       @alternative.reference
+       @staticmethod
+       def is_valid(value: str) -> bool:
+           return value.strip().isdigit()
+
+       @is_valid.add(default=True)
+       @staticmethod
+       def is_valid_fast(value: str) -> bool:
+           return value.isdigit()
+
+Calling through an instance or class binds ``self`` and ``cls`` normally. Direct
+alternative implementations also bind normally, so ``parser.parse_fast("1")``
+or ``Parser.from_text_fast("1")`` call that implementation directly.

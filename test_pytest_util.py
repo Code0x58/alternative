@@ -65,6 +65,45 @@ def test_select_parametrize_implementations(only_default: bool):
         ]
 
 
+def test_select_parametrize_implementations_with_implicit_default():
+    """Only-default parametrization includes the wrapper when the reference default is implicit."""
+
+    @alternative.reference
+    def reference_impl():
+        return 1
+
+    @reference_impl.add
+    def extra_impl():
+        return 2
+
+    selected = reference_impl._select_parametrize_implementations(  # pyrefly: ignore
+        only_default=True
+    )
+
+    assert selected == [
+        reference_impl.reference.implementation,
+        reference_impl.callable,
+    ]
+
+
+def test_select_parametrize_implementations_with_explicit_reference_default():
+    """Only-default parametrization does not duplicate an explicitly defaulted reference."""
+
+    @alternative.reference(default=True)
+    def reference_impl():
+        return 1
+
+    @reference_impl.add
+    def extra_impl():
+        return 2
+
+    selected = reference_impl._select_parametrize_implementations(  # pyrefly: ignore
+        only_default=True
+    )
+
+    assert selected == [reference_impl.reference.implementation]
+
+
 @pytest.mark.parametrize("only_default", [False, True])
 @pytest.mark.parametrize("double_reference", [False, True])
 def test_pytest_parametrize_pairs_signature_and_parameters(
