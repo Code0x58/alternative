@@ -4,7 +4,7 @@ import dataclasses
 import inspect
 import os
 from functools import wraps, lru_cache
-from typing import Any, Callable
+from typing import Callable, Protocol
 from typing import cast, overload
 
 
@@ -29,6 +29,10 @@ __all__ = [
 
 
 class _UNDEFINED: ...
+
+
+class _SupportsLessThan(Protocol):
+    def __lt__(self, other: object, /) -> bool: ...
 
 
 _UNDEFINED_VALUE = _UNDEFINED()
@@ -222,7 +226,8 @@ class Alternatives[**P, R]:
                 sorted(
                     result.items(),
                     key=cast(
-                        Callable[[tuple[Implementation[P, R], M]], Any], lambda x: x[1]
+                        Callable[[tuple[Implementation[P, R], M]], _SupportsLessThan],
+                        lambda x: cast(_SupportsLessThan, x[1]),
                     ),
                 )
             )
