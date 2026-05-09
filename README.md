@@ -2,16 +2,16 @@
 
 # alternative
 
-A tiny library for managing multiple implementations of the same function — especially when you're iterating toward faster or cleaner versions and want those choices to stay explicit, testable, and safe.
+A tiny, dependency-free library for managing multiple implementations of the same function — especially when you're iterating toward faster or cleaner versions and want those choices to stay explicit, testable, and safe.
 
 ## Why use this?
 
 When optimizing a hot path, it’s common to accumulate:
 
-- a trusted baseline implementation,
-- one or more candidate rewrites,
-- tests to keep them equivalent,
-- and benchmarks to validate wins.
+- a trusted reference implementation
+- one or more candidate rewrites
+- tests to keep them equivalent
+- benchmarks to validate wins
 
 `alternative` keeps that workflow tidy by making implementation registration and selection first-class.
 
@@ -59,7 +59,7 @@ Use `pytest_parametrize_pairs(...)` to compare the reference against each candid
 Use `pytest_parametrize(...)` to run one test body across all implementations.
 
 - Great for benchmark workflows with [`pytest-benchmark`](https://pypi.org/project/pytest-benchmark/): [`examples/test_benchmark.py`](examples/test_benchmark.py)
-- Also useful for validating that every implementation passes one shared test suite.
+- Useful for validating that every implementation passes one shared test suite
 
 ## Safety guarantees
 
