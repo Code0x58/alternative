@@ -243,10 +243,37 @@ def test_add_from_other_alternatives():
 
     # alt1 comes from a different set of alternatives of f2
     assert isinstance(alt1, alternative.Implementation)
-    assert f2.add(alt1).alternatives is f2
+    with pytest.raises(alternative.CrossAlternativesImplementation):
+        f2.add(alt1)
 
-    # when duplicating an implementation, a new Implementation object is returned
+    # adding an implementation to its own alternatives clones the wrapper
     assert f1.add(alt1) is not alt1
+
+
+def test_cross_owner_add_error():
+    """Adding a cross-owner implementation raises a dedicated explicit error."""
+
+    @alternative.reference
+    def source():
+        return 1
+
+    @source.add
+    def source_alt():
+        return 2
+
+    @alternative.reference
+    def target():
+        return 3
+
+    expected = (
+        r"^Cannot add "
+        r"Implementation\(test_cross_owner_add_error\.<locals>\.source_alt(?:, label='[^']+')?\) "
+        r"to Implementation\(test_cross_owner_add_error\.<locals>\.target(?:, label='[^']+')?\); "
+        r"it belongs to a different Alternatives set\. "
+        r"Pass implementation\.implementation to clone explicitly\.$"
+    )
+    with pytest.raises(alternative.CrossAlternativesImplementation, match=expected):
+        target.add(source_alt)
 
 
 def test_implementation_label_populated_in_debug(monkeypatch):

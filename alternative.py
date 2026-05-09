@@ -40,6 +40,10 @@ class MultipleDefaults(AlternativeError):
     """Cannot set the default implementation more than once."""
 
 
+class CrossAlternativesImplementation(AlternativeError):
+    """Cannot add an Implementation object that belongs to a different Alternatives set."""
+
+
 def get_caller_path() -> str | None:
     """
     Return 'module.QualName (file.py:line)' pointing to the line
@@ -147,7 +151,7 @@ class Alternatives[**P, R]:
             raise AddTooLate(msg)
 
         if isinstance(implementation, _UNDEFINED):
-            # FIXME: handle when implementation is for a different set of alternatives
+
             def wrapper(
                 implementation: ImplementationSig[P, R],
             ) -> Implementation[P, R]:
@@ -158,6 +162,12 @@ class Alternatives[**P, R]:
         label = maybe_get_caller_path()
         if not isinstance(implementation, Implementation):
             imp = Implementation(self, implementation, label=label)
+        elif implementation.alternatives is not self:
+            raise CrossAlternativesImplementation(
+                f"Cannot add {implementation!r} to {self.reference!r}; "
+                "it belongs to a different Alternatives set. "
+                "Pass implementation.implementation to clone explicitly."
+            )
         else:
             imp = Implementation(self, implementation.implementation, label=label)
 
