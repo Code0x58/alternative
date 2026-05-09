@@ -4,8 +4,15 @@ import dataclasses
 import inspect
 import os
 from functools import wraps, lru_cache
-from typing import Callable, Protocol
-from typing import cast, overload
+from typing import (
+    Callable,
+    Generic,
+    ParamSpec,
+    Protocol,
+    TypeVar,
+    cast,
+    overload,
+)
 
 
 DEBUG = os.environ.get("ALTERNATIVE_DEBUG", "0").lower() in (
@@ -37,13 +44,9 @@ class _SupportsLessThan(Protocol):
 
 _UNDEFINED_VALUE = _UNDEFINED()
 
-type ImplementationSig[**P, R] = Callable[P, R] | Implementation[P, R]
-type AlternativesWrapper[**P, R] = Callable[
-    [ImplementationSig[P, R]], Alternatives[P, R]
-]
-type ImplementationWrapper[**P, R] = Callable[
-    [ImplementationSig[P, R]], Implementation[P, R]
-]
+P = ParamSpec("P")
+R = TypeVar("R")
+M = TypeVar("M")
 
 
 class AlternativeError(Exception):
@@ -101,7 +104,7 @@ def _maybe_get_caller_path() -> str | None:
     return None
 
 
-class Alternatives[**P, R]:
+class Alternatives(Generic[P, R]):
     def __init__(self, implementation: Callable[P, R], *, default: bool = False):
         imp = Implementation(self, implementation, label=_maybe_get_caller_path())
         self.reference = imp
@@ -126,10 +129,13 @@ class Alternatives[**P, R]:
     @overload
     def add(
         self, implementation: _UNDEFINED = _UNDEFINED_VALUE, *, default: bool = False
-    ) -> ImplementationWrapper[P, R]: ...
+    ) -> Callable[[Callable[P, R] | Implementation[P, R]], Implementation[P, R]]: ...
     @overload
     def add(
-        self, implementation: ImplementationSig[P, R], *, default: bool = False
+        self,
+        implementation: Callable[P, R] | Implementation[P, R],
+        *,
+        default: bool = False,
     ) -> Implementation[P, R]: ...
 
     def add(
@@ -137,7 +143,10 @@ class Alternatives[**P, R]:
         implementation=_UNDEFINED_VALUE,
         *,
         default=False,
-    ) -> Implementation[P, R] | ImplementationWrapper[P, R]:
+    ) -> (
+        Implementation[P, R]
+        | Callable[[Callable[P, R] | Implementation[P, R]], Implementation[P, R]]
+    ):
         if self._implementations_used:
             # avoid surprises from implementation changes after selection/inspection
             if DEBUG:
@@ -149,11 +158,11 @@ class Alternatives[**P, R]:
         if isinstance(implementation, _UNDEFINED):
 
             def wrapper(
-                implementation: ImplementationSig[P, R],
+                implementation: Callable[P, R] | Implementation[P, R],
             ) -> Implementation[P, R]:
                 return self.add(implementation, default=default)
 
-            return cast(ImplementationWrapper[P, R], wrapper)
+            return wrapper
 
         label = _maybe_get_caller_path()
         if not isinstance(implementation, Implementation):
@@ -210,7 +219,7 @@ class Alternatives[**P, R]:
         # this method will only be called at most once as self.callable overwrites self.__call__
         return self.callable(*args, **kwargs)
 
-    def measure[M](
+    def measure(
         self, /, operator: Callable[[R], M], *args: P.args, **kwargs: P.kwargs
     ) -> dict[Implementation[P, R], M]:
         """Invoke each implementation with the given parameters, then evaluate their results with the operator.
@@ -387,7 +396,7 @@ class Alternatives[**P, R]:
 
 
 @dataclasses.dataclass(unsafe_hash=True)
-class Implementation[**P, R]:
+class Implementation(Generic[P, R]):
     alternatives: Alternatives[P, R]
     implementation: Callable[P, R]
     label: str | None = None
@@ -411,32 +420,38 @@ class Implementation[**P, R]:
     @overload
     def add(
         self, implementation: _UNDEFINED = _UNDEFINED_VALUE, *, default: bool = False
-    ) -> ImplementationWrapper[P, R]: ...
+    ) -> Callable[[Callable[P, R] | Implementation[P, R]], Implementation[P, R]]: ...
     @overload
     def add(
-        self, implementation: ImplementationSig[P, R], *, default: bool = False
+        self,
+        implementation: Callable[P, R] | Implementation[P, R],
+        *,
+        default: bool = False,
     ) -> Implementation[P, R]: ...
 
     def add(
         self, implementation=_UNDEFINED_VALUE, *, default=False
-    ) -> Implementation[P, R] | ImplementationWrapper[P, R]:
+    ) -> (
+        Implementation[P, R]
+        | Callable[[Callable[P, R] | Implementation[P, R]], Implementation[P, R]]
+    ):
         """Add an alternative implementation."""
         return self.alternatives.add(implementation, default=default)
 
 
 @overload
-def reference[**P, R](
+def reference(
     implementation: _UNDEFINED = _UNDEFINED_VALUE, *, default: bool = False
 ) -> Callable[[Callable[P, R]], Alternatives[P, R]]: ...
 
 
 @overload
-def reference[**P, R](  # pyrefly: ignore[inconsistent-overload]
+def reference(
     implementation: Callable[P, R], *, default: bool = False
 ) -> Alternatives[P, R]: ...
 
 
-def reference[**P, R](
+def reference(
     implementation=_UNDEFINED_VALUE,
     *,
     default=False,
@@ -447,6 +462,6 @@ def reference[**P, R](
             """Add the reference implementation to the alternatives"""
             return Alternatives(f, default=default)
 
-        return cast(AlternativesWrapper[P, R], inner)
+        return inner
     else:
         return Alternatives(implementation, default=default)
