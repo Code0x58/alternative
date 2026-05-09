@@ -10,26 +10,29 @@ dependencies = [
     { name = "pytest" },
 ]
 
-[package.dev-dependencies]
+[package.optional-dependencies]
 dev = [
-    { name = "alternative" },
-    { name = "pytest" },
     { name = "pytest-benchmark" },
     { name = "pytest-cov" },
     { name = "pytest-ruff" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "alternative", extra = ["dev"] },
+]
+
 [package.metadata]
-requires-dist = [{ name = "pytest", specifier = ">=8.3.5" }]
+requires-dist = [
+    { name = "pytest", specifier = ">=8.3.5" },
+    { name = "pytest-benchmark", marker = "extra == 'dev'", specifier = ">=5.1.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.1.1" },
+    { name = "pytest-ruff", marker = "extra == 'dev'", specifier = ">=0.4.1" },
+]
+provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "alternative", editable = "." },
-    { name = "pytest", specifier = ">=8.3.5" },
-    { name = "pytest-benchmark", specifier = ">=5.1.0" },
-    { name = "pytest-cov", specifier = ">=6.1.1" },
-    { name = "pytest-ruff", specifier = ">=0.4.1" },
-]
+dev = [{ name = "alternative", extras = ["dev"], editable = "." }]
 
 [[package]]
 name = "colorama"

@@ -11,13 +11,16 @@ dependencies = [
     "pytest>=8.3.5",
 ]
 
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
     "pytest-benchmark>=5.1.0",
-    "pytest>=8.3.5",
-    "alternative",
     "pytest-cov>=6.1.1",
     "pytest-ruff>=0.4.1",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "alternative[dev]",
 ]
 
 [tool.uv.sources]
