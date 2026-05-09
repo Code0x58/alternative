@@ -42,6 +42,10 @@ jobs:
         run: uv run --dev ruff format --check --diff .
         continue-on-error: true
 
+      - name: Ruff lint check
+        run: uv run --dev ruff check .
+        continue-on-error: true
+
       - name: Type check
         run: |
           uv run --dev pyrefly check .
@@ -54,7 +58,7 @@ jobs:
           # Unset it so pytest can discover pytest-cov and pytest-benchmark via entry points,
           # which are required by the addopts configured in pyproject.toml.
           unset PYTEST_DISABLE_PLUGIN_AUTOLOAD
-          uv run --dev pytest -vv --ruff --ruff-format --cov=alternative --cov-report=xml --junitxml=test-results.xml
+          uv run --dev pytest -vv --cov=alternative --cov-report=xml --junitxml=test-results.xml
 
       - name: Upload coverage to Codecov
         if: always() && env.CODECOV_TOKEN != ''
