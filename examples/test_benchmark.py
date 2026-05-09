@@ -15,5 +15,5 @@ def alternative_implementation1():
 
 @reference_implementation.pytest_parametrize(only_default=False)
 def test_f(benchmark, implementation):
-    """Compare the output of the reference (with caching) and each alternative implementation."""
+    """Benchmark all implementations using the pytest-benchmark `benchmark` fixture."""
     assert benchmark(implementation) == 1

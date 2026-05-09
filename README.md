@@ -27,7 +27,7 @@ assert constant_number() == 2
 # alternative implementations still act like themselves
 assert unused_alternative_constant_number() == 3
 
-# TODO: mash in measure + benchmark + equality tests from examples
+See `examples/test_measure.py`, `examples/test_equivalence.py`, and `examples/test_benchmark.py` for measure, equivalence, and benchmark pytest patterns (the benchmark example uses the `pytest-benchmark` fixture).
 ```
 
 The library tries to avoid unpleasant surprises that may come from import orders or maintenance issues:
