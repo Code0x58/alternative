@@ -101,7 +101,7 @@ class Mutability(enum.IntEnum):
 
 class Alternatives[**P, R]:
     def __init__(self, implementation: Callable[P, R], *, default: bool = False):
-        imp = Implementation(self, implementation)
+        imp = Implementation(self, implementation, label=maybe_get_caller_path())
         self.reference = imp
         # tracks the active implementation
         self._default: Implementation[P, R] | None = None
@@ -155,16 +155,17 @@ class Alternatives[**P, R]:
 
             return cast(ImplementationWrapper[P, R], wrapper)
 
+        label = maybe_get_caller_path()
         if not isinstance(implementation, Implementation):
-            imp = Implementation(self, implementation)
+            imp = Implementation(self, implementation, label=label)
         else:
-            imp = Implementation(self, implementation.implementation)
+            imp = Implementation(self, implementation.implementation, label=label)
 
         if default:
             if self._default is not None:
                 # only allow explicitly setting the default implementation once
                 if DEBUG:
-                    msg = f"first default was specified at {self._debug_default}"
+                    msg = f"first default was specified at {self._debug_default}; existing default={self._default!r}"
                 else:
                     msg = None
                 raise MultipleDefaults(msg)
@@ -375,8 +376,19 @@ class Alternatives[**P, R]:
 class Implementation[**P, R]:
     alternatives: Alternatives[P, R]
     implementation: Callable[P, R]
+    label: str | None = None
 
-    # TODO: add something like "label" which can be printed, e.g. "examples/test_measure.py:36" which would be a hyperlink in PyCharm
+    def __post_init__(self):
+        if self.label is None:
+            self.label = maybe_get_caller_path()
+
+    def __repr__(self) -> str:
+        implementation_name = getattr(
+            self.implementation, "__qualname__", repr(self.implementation)
+        )
+        if self.label:
+            return f"Implementation({implementation_name}, label={self.label!r})"
+        return f"Implementation({implementation_name})"
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
         self.__call__ = self.implementation

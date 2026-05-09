@@ -247,3 +247,68 @@ def test_add_from_other_alternatives():
 
     # when duplicating an implementation, a new Implementation object is returned
     assert f1.add(alt1) is not alt1
+
+
+def test_implementation_label_populated_in_debug(monkeypatch):
+    """Implementation labels include caller metadata in debug mode."""
+    monkeypatch.setattr(alternative, "DEBUG", True)
+
+    @alternative.reference
+    def f():
+        return 1
+
+    @f.add
+    def alt():
+        return 2
+
+    expected_prefix = (
+        f"test_alternative.test_implementation_label_populated_in_debug ({__file__}"
+    )
+
+    f_reference_prefix, _, f_reference_line = f.reference.label.rpartition(":")
+    assert f_reference_prefix == expected_prefix
+    assert f_reference_line[:-1].isdigit()
+
+    alt_prefix, _, alt_line = alt.label.rpartition(":")
+    assert alt_prefix == expected_prefix
+    assert alt_line[:-1].isdigit()
+
+    assert (
+        repr(alt)
+        == f"Implementation(test_implementation_label_populated_in_debug.<locals>.alt, label={alt.label!r})"
+    )
+
+
+def test_implementation_label_safe_when_caller_unavailable(monkeypatch):
+    """Implementation label uses fallback when caller information cannot be resolved."""
+    monkeypatch.setattr(alternative, "DEBUG", True)
+    monkeypatch.setattr(
+        alternative,
+        "get_caller_path",
+        lambda: "<unknown module>.<unknown> (<unknown location>)",
+    )
+
+    @alternative.reference
+    def f():
+        return 1
+
+    assert f.reference.label == "<unknown module>.<unknown> (<unknown location>)"
+
+
+def test_implementation_repr_without_label(monkeypatch):
+    """Implementation repr omits label when no label metadata is available."""
+    monkeypatch.setattr(alternative, "DEBUG", False)
+
+    @alternative.reference
+    def f():
+        return 1
+
+    @f.add
+    def alt():
+        return 2
+
+    assert alt.label is None
+    assert (
+        repr(alt)
+        == "Implementation(test_implementation_repr_without_label.<locals>.alt)"
+    )
