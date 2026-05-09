@@ -51,14 +51,14 @@ The examples directory includes practical pytest patterns that make this library
 
 Use `pytest_parametrize_pairs(...)` to compare the reference against each candidate implementation.
 
-- Basic pairwise checks: `examples/test_measure.py`
-- More configurable pairwise checks: `examples/test_equivalence.py`
+- Basic pairwise checks: [`examples/test_measure.py`](examples/test_measure.py)
+- More configurable pairwise checks: [`examples/test_equivalence.py`](examples/test_equivalence.py)
 
 ### Single-implementation parametrization
 
 Use `pytest_parametrize(...)` to run one test body across all implementations.
 
-- Great for benchmark workflows with `pytest-benchmark`: `examples/test_benchmark.py`
+- Great for benchmark workflows with [`pytest-benchmark`](https://pypi.org/project/pytest-benchmark/): [`examples/test_benchmark.py`](examples/test_benchmark.py)
 - Also useful for validating that every implementation passes one shared test suite.
 
 ## Safety guarantees
