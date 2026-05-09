@@ -128,7 +128,7 @@ def test_multiple_defaults(debug_func: str | None, monkeypatch):
         match = rf"^first default was specified at test_alternative\.{debug_func} \({re.escape(__file__)}:\d+\)"
     else:
         match = "^None$"
-    with pytest.raises(alternative.MultipleDefaults, match=match):
+    with pytest.raises(alternative.MultipleDefaultsError, match=match):
         alt1.add(alt2, default=True)
     # but an additional implementation can be registered
     alt1.add(alt2, default=False)
@@ -154,7 +154,7 @@ def test_default_after_invocation(debug_func: str | None):
         match = "^None$"
 
     assert f() == 1
-    with pytest.raises(alternative.AddTooLate, match=match):
+    with pytest.raises(alternative.AddTooLateError, match=match):
         f.add(alt, default=True)
 
 
@@ -187,7 +187,7 @@ def test_no_add_after_invoke(debug_func: str | None):
         match = rf"^added implementation after first invocation at test_alternative\.{debug_func} \({re.escape(__file__)}:\d+\)"
     else:
         match = "^None$"
-    with pytest.raises(alternative.AddTooLate, match=match):
+    with pytest.raises(alternative.AddTooLateError, match=match):
 
         @f.add
         def alt():
@@ -212,7 +212,7 @@ def test_no_additions_after_implementations_access(debug_func: str | None = None
     else:
         match = "^None$"
 
-    with pytest.raises(alternative.AddTooLate, match=match):
+    with pytest.raises(alternative.AddTooLateError, match=match):
 
         @f.add
         def alt():
@@ -243,7 +243,7 @@ def test_add_from_other_alternatives():
 
     # alt1 comes from a different set of alternatives of f2
     assert isinstance(alt1, alternative.Implementation)
-    with pytest.raises(alternative.CrossAlternativesImplementation):
+    with pytest.raises(alternative.CrossAlternativesImplementationError):
         f2.add(alt1)
 
     # adding an implementation to its own alternatives clones the wrapper
@@ -272,7 +272,9 @@ def test_cross_owner_add_error():
         r"it belongs to a different Alternatives set\. "
         r"Pass implementation\.implementation to clone explicitly\.$"
     )
-    with pytest.raises(alternative.CrossAlternativesImplementation, match=expected):
+    with pytest.raises(
+        alternative.CrossAlternativesImplementationError, match=expected
+    ):
         target.add(source_alt)
 
 
@@ -311,7 +313,7 @@ def test_implementation_label_safe_when_caller_unavailable(monkeypatch):
     monkeypatch.setattr(alternative, "DEBUG", True)
     monkeypatch.setattr(
         alternative,
-        "get_caller_path",
+        "_get_caller_path",
         lambda: "<unknown module>.<unknown> (<unknown location>)",
     )
 
