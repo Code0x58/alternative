@@ -38,4 +38,6 @@ Running with `ALTERNATIVE_DEBUG=1` as an environment variable will result in the
 responsible for critical state changes like the point that a default implementation was selected or the implementations
 were inspected. These are then used in error messages which can be used to resolve stateful issues.
 
+When debug mode is enabled, each `Implementation` also captures a label containing its registration call-site. This label is surfaced in `repr(...)` and selected debug errors to help disambiguate which implementation instance was involved.
+
 For how this can tie in with equivalence checks and benchmarking in pytest, see the examples directory.
