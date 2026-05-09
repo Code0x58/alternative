@@ -7,24 +7,18 @@ authors = [
     { name = "Oliver Bristow", email = "evilumbrella+github@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = [
-    "pytest>=8.3.5",
-]
+dependencies = []
 
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
-    "pytest-benchmark>=5.1.0",
     "pytest>=8.3.5",
-    "alternative",
+    "pytest-benchmark>=5.1.0",
     "pytest-cov>=6.1.1",
 ]
 
 [tool.uv]
 dev-dependencies = [
-    "alternative",
-    "pytest>=8.3.5",
-    "pytest-benchmark>=5.1.0",
-    "pytest-cov>=6.1.1",
+    "alternative[dev]",
 ]
 
 [tool.uv.sources]

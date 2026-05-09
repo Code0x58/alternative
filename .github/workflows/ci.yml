@@ -42,6 +42,10 @@ jobs:
         run: uv run --dev ruff format --check --diff .
         continue-on-error: true
 
+      - name: Ruff lint check
+        run: uv run --dev ruff check .
+        continue-on-error: true
+
       - name: Type check
         run: |
           uv run --dev pyrefly check .
