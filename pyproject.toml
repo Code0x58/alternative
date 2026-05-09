@@ -35,3 +35,11 @@ build-backend = "hatchling.build"
 [tool.pytest.ini_options]
 # do 5 rounds of 0.01 benchmarks, as the benchmarks are examples or very fast
 addopts = "--cov=alternative --cov-report=html --benchmark-max-time=0.01"
+
+
+[tool.mypy]
+python_version = "3.12"
+
+[[tool.mypy.overrides]]
+module = ["pytest"]
+ignore_missing_imports = true

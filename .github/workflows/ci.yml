@@ -46,11 +46,11 @@ jobs:
         run: uv run --dev ruff check .
         continue-on-error: true
 
-      - name: Type check
-        run: |
-          uv run --dev pyrefly check .
-          uv run --dev mypy .
-        continue-on-error: true
+      - name: Pyrefly type check
+        run: uv run --dev pyrefly check .
+
+      - name: Mypy type check
+        run: uv run --dev mypy .
 
       - name: Run tests
         run: |
@@ -61,7 +61,7 @@ jobs:
           uv run --dev pytest -vv --cov=alternative --cov-report=xml --junitxml=test-results.xml
 
       - name: Upload coverage to Codecov
-        if: always() && env.CODECOV_TOKEN != ''
+        if: (success() || hashFiles('coverage.xml') != '') && env.CODECOV_TOKEN != ''
         uses: codecov/codecov-action@v5
         with:
           token: ${{ env.CODECOV_TOKEN }}
@@ -69,7 +69,7 @@ jobs:
           fail_ci_if_error: true
 
       - name: Upload test results to Codecov
-        if: always() && env.CODECOV_TOKEN != ''
+        if: (success() || hashFiles('test-results.xml') != '') && env.CODECOV_TOKEN != ''
         uses: codecov/codecov-action@v5
         with:
           token: ${{ env.CODECOV_TOKEN }}
