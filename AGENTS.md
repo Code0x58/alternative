@@ -7,6 +7,7 @@ The repository defines testing via GitHub actions. When contributing:
   * `uv run --dev pyrefly check .`
   * `uv run --dev pyright typing_tests`
   * `uv run --dev mypy .`
+  * `uv run --dev stubtest alternative`
   * `uv run --dev pytest --verbosity=2 --cov=alternative --cov-report=xml --cov-fail-under=100 --junit-xml=test-results.xml`
   * `uv run --group=docs sphinx-build --fail-on-warning --keep-going --builder=html docs /tmp/alternative-docs-html`
 * Format code with `uv run --dev ruff format .` before committing.

@@ -53,6 +53,9 @@ jobs:
       - name: Mypy type check
         run: uv run --dev mypy .
 
+      - name: Stubtest runtime typing check
+        run: uv run --dev stubtest alternative
+
       - name: Run tests
         run: |
           # Some GitHub-hosted runners export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1.
