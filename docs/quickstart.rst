@@ -42,12 +42,20 @@ runtime implementation:
 
 .. code-block:: python
 
-   @normalise_name.add(default=True)
-   def normalise_name_fast(name: str) -> str:
+   import alternative
+
+
+   @alternative.reference
+   def display_name(name: str) -> str:
+       return " ".join(part.capitalize() for part in name.split())
+
+
+   @display_name.add(default=True)
+   def display_name_fast(name: str) -> str:
        return name.title()
 
 
-   assert normalise_name("grace hopper") == "Grace Hopper"
+   assert display_name("grace hopper") == "Grace Hopper"
 
 Only one explicit default can be registered. This catches accidental import
 order changes where two modules both try to choose the active implementation.
@@ -96,3 +104,45 @@ alternatives set. This makes chained registration convenient:
        return int(text)
 
 The three implementations still belong to the same alternatives set.
+
+Use Methods
+-----------
+
+``alternative`` follows Python descriptor binding rules, so the same decorator
+also works on methods. Put ``@alternative.reference`` outside
+``@classmethod`` or ``@staticmethod`` when those decorators are needed:
+
+.. code-block:: python
+
+   class Parser:
+       @alternative.reference
+       def parse(self, value: str) -> int:
+           return int(value.strip())
+
+       @parse.add(default=True)
+       def parse_fast(self, value: str) -> int:
+           return int(value)
+
+       @alternative.reference
+       @classmethod
+       def from_text(cls, value: str) -> "Parser":
+           return cls(value.strip())
+
+       @from_text.add(default=True)
+       @classmethod
+       def from_text_fast(cls, value: str) -> "Parser":
+           return cls(value)
+
+       @alternative.reference
+       @staticmethod
+       def is_valid(value: str) -> bool:
+           return value.strip().isdigit()
+
+       @is_valid.add(default=True)
+       @staticmethod
+       def is_valid_fast(value: str) -> bool:
+           return value.isdigit()
+
+Calling through an instance or class binds ``self`` and ``cls`` normally. Direct
+alternative implementations also bind normally, so ``parser.parse_fast("1")``
+or ``Parser.from_text_fast("1")`` call that implementation directly.

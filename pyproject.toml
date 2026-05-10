@@ -36,14 +36,19 @@ dev = [
     "pytest>=8.3.5",
     "pytest-benchmark>=5.1.0",
     "pytest-cov>=6.1.1",
+    "sybil>=9.3.0,<10",
 ]
 
 [tool.uv]
 dev-dependencies = [
     "alternative[dev]",
+    "build>=1.2.2",
+    "hatchling>=1.27.0",
     "mypy>=2.0.0",
+    "pyright>=1.1.407",
     "pyrefly>=0.64.1",
     "ruff>=0.15.12",
+    "typing-extensions>=4.15.0",
 ]
 
 [dependency-groups]
@@ -59,8 +64,29 @@ alternative = { workspace = true }
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.sdist]
+include = [
+    "/alternative.py",
+    "/alternative.pyi",
+    "/conftest.py",
+    "/docs",
+    "/LICENSE",
+    "/pyproject.toml",
+    "/README.md",
+    "/scripts",
+    "/test_*.py",
+    "/typing_tests",
+    "/uv.lock",
+]
+
+[tool.hatch.build.targets.wheel]
+only-include = [
+    "alternative.py",
+    "alternative.pyi",
+]
+
 [tool.pytest.ini_options]
-# do 5 rounds of 0.01 benchmarks, as the benchmarks are examples or very fast
+# keep benchmark-backed tests bounded when present
 addopts = "--cov=alternative --cov-report=html --benchmark-max-time=0.01"
 
 

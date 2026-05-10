@@ -1,10 +1,11 @@
 import re
+from inspect import signature
+from typing import Callable, cast
 from unittest.mock import MagicMock
 
 import pytest
 
 import alternative
-from inspect import signature
 
 
 def imp_for_cmp(imp: alternative.Implementation | None) -> dict | None:
@@ -39,9 +40,9 @@ def test_add_happy_path():
 
 def test_coupled_signatures():
     """The signatures of reference, Alternative.add, and Implementation.add are aligned."""
-    ref_sig = signature(alternative.reference)  # pyrefly: ignore
-    alt_sig = signature(alternative.Alternatives.add)  # pyrefly: ignore
-    imp_sig = signature(alternative.Implementation.add)  # pyrefly: ignore
+    ref_sig = signature(cast(Callable[..., object], alternative.reference))
+    alt_sig = signature(cast(Callable[..., object], alternative.Alternatives.add))
+    imp_sig = signature(cast(Callable[..., object], alternative.Implementation.add))
     assert alt_sig.parameters == imp_sig.parameters
     # skip the self-parameter to give matching signatures
     assert (
@@ -250,6 +251,54 @@ def test_add_from_other_alternatives():
     assert f1.add(alt1) is not alt1
 
 
+def test_measure_sorts_sortable_measurements() -> None:
+    """Measurements are sorted by the measured value when the values are sortable."""
+
+    @alternative.reference
+    def make_four() -> str:
+        return "1 + 1 + 1 + 1"
+
+    @make_four.add
+    def make_four_factor() -> str:
+        return "2 * 2"
+
+    @make_four.add
+    def make_four_literal() -> str:
+        return "4"
+
+    measurements = make_four.measure(len)
+
+    assert list(measurements.items()) == [
+        (make_four_literal, 1),
+        (make_four_factor, 5),
+        (make_four.reference, 13),
+    ]
+
+
+def test_measure_preserves_registration_order_for_unsortable_measurements() -> None:
+    """Measurements keep registration order when the measured values cannot be sorted."""
+
+    @alternative.reference
+    def make_four() -> str:
+        return "1 + 1 + 1 + 1"
+
+    @make_four.add
+    def make_four_factor() -> str:
+        return "2 * 2"
+
+    @make_four.add
+    def make_four_literal() -> str:
+        return "4"
+
+    measurements = make_four.measure(lambda code: len(code) + 0j)
+
+    assert list(measurements.items()) == [
+        (make_four.reference, 13 + 0j),
+        (make_four_factor, 5 + 0j),
+        (make_four_literal, 1 + 0j),
+    ]
+
+
 def test_cross_owner_add_error():
     """Adding a cross-owner implementation raises a dedicated explicit error."""
 
@@ -341,3 +390,137 @@ def test_implementation_repr_without_label(monkeypatch):
         repr(alt)
         == "Implementation(test_implementation_repr_without_label.<locals>.alt)"
     )
+
+
+def test_instance_method_binding() -> None:
+    """Alternatives bind instance methods through descriptor access."""
+
+    class Calculator:
+        def __init__(self, offset: int):
+            self.offset = offset
+
+        @alternative.reference
+        def add(self, value: int) -> tuple[str, int]:
+            return ("reference", self.offset + value)
+
+        @add.add(default=True)
+        def add_default(self, value: int) -> tuple[str, int]:
+            return ("default", self.offset + value)
+
+        @add.add
+        def add_extra(self, value: int) -> tuple[str, int]:
+            return ("extra", self.offset + value)
+
+    calculator = Calculator(10)
+
+    assert calculator.add(5) == ("default", 15)
+    assert calculator.add_default(5) == ("default", 15)
+    assert calculator.add_extra(5) == ("extra", 15)
+    assert Calculator.add(calculator, 5) == ("default", 15)
+    assert Calculator.add_extra(calculator, 5) == ("extra", 15)
+    assert calculator.add_extra.alternatives is Calculator.__dict__["add"]
+    descriptor = cast(
+        alternative.Alternatives[Calculator, [int], tuple[str, int]],
+        Calculator.__dict__["add"],
+    )
+    assert descriptor.__get__(calculator)(5) == ("default", 15)
+
+
+def test_classmethod_binding() -> None:
+    """Alternatives bind classmethod implementations to the owner class."""
+
+    class Factory:
+        marker = "Factory"
+
+        @alternative.reference
+        @classmethod
+        def build(cls, value: str) -> tuple[str, str, str]:
+            return ("reference", cls.marker, value)
+
+        @build.add(default=True)
+        @classmethod
+        def build_default(cls, value: str) -> tuple[str, str, str]:
+            return ("default", cls.marker, value)
+
+        @build.add
+        @classmethod
+        def build_extra(cls, value: str) -> tuple[str, str, str]:
+            return ("extra", cls.marker, value)
+
+    class ChildFactory(Factory):
+        marker = "ChildFactory"
+
+    assert Factory.build("a") == ("default", "Factory", "a")
+    assert Factory().build("a") == ("default", "Factory", "a")
+    assert Factory.build_default("a") == ("default", "Factory", "a")
+    assert Factory.build_extra("a") == ("extra", "Factory", "a")
+    assert ChildFactory.build("a") == ("default", "ChildFactory", "a")
+    assert ChildFactory.build_extra("a") == ("extra", "ChildFactory", "a")
+
+
+def test_staticmethod_binding() -> None:
+    """Alternatives preserve staticmethod binding from class and instance access."""
+
+    class Parser:
+        @alternative.reference
+        @staticmethod
+        def parse(value: str) -> tuple[str, str]:
+            return ("reference", value)
+
+        @parse.add(default=True)
+        @staticmethod
+        def parse_default(value: str) -> tuple[str, str]:
+            return ("default", value)
+
+        @parse.add
+        @staticmethod
+        def parse_extra(value: str) -> tuple[str, str]:
+            return ("extra", value)
+
+    assert Parser.parse("x") == ("default", "x")
+    assert Parser().parse("x") == ("default", "x")
+    assert Parser.parse_default("x") == ("default", "x")
+    assert Parser.parse_extra("x") == ("extra", "x")
+
+
+def test_bound_attribute_access_does_not_freeze_implementations() -> None:
+    """Accessing a method alternative does not freeze registrations before invocation."""
+
+    class Counter:
+        @alternative.reference
+        def value(self) -> int:
+            return 1
+
+    bound_value = Counter().value
+
+    @Counter.value.add(default=True)
+    def value_default(self) -> int:
+        return 2
+
+    assert bound_value() == 2
+
+
+def test_bound_method_registration_delegates_to_alternatives() -> None:
+    """Bound alternatives expose registration and metadata without dynamic attribute typing."""
+
+    class Counter:
+        @alternative.reference
+        def value(self) -> int:
+            return 1
+
+    counter = Counter()
+
+    @counter.value.add(default=True)
+    def value_default(self) -> int:
+        return 2
+
+    @value_default.__get__(counter, type(counter)).add
+    def value_extra(self) -> int:
+        return 3
+
+    assert counter.value.implementations == Counter.__dict__["value"].implementations
+    assert counter.value.reference is Counter.__dict__["value"].reference
+    assert counter.value.callable is Counter.__dict__["value"].callable
+    assert counter.value() == 2
+    assert value_default.__get__(counter, type(counter))() == 2
+    assert value_extra(counter) == 3

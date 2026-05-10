@@ -1,4 +1,5 @@
 import inspect
+from collections.abc import Callable
 
 import alternative
 import pytest
@@ -50,9 +51,14 @@ def test_select_parametrize_implementations(only_default: bool):
     def extra_impl():
         return 3
 
-    selected = reference_impl._select_parametrize_implementations(  # pyrefly: ignore
-        only_default=only_default
+    def parametrized(implementation: Callable[[], int]) -> None:
+        """Placeholder test used to inspect pytest parametrization values."""
+        assert implementation() in {1, 2, 3}
+
+    decorated = reference_impl.pytest_parametrize(
+        parametrized, only_default=only_default
     )
+    selected = _parametrize_values(decorated, "implementation")[0]
     default_callable = default_impl.implementation
     extra_callable = extra_impl.implementation
     if only_default:
@@ -63,6 +69,68 @@ def test_select_parametrize_implementations(only_default: bool):
             default_callable,
             extra_callable,
         ]
+
+
+def test_select_parametrize_implementations_with_implicit_default():
+    """Only-default parametrization includes the wrapper when the reference default is implicit."""
+
+    @alternative.reference
+    def reference_impl():
+        return 1
+
+    @reference_impl.add
+    def extra_impl():
+        return 2
+
+    def parametrized(implementation: Callable[[], int]) -> None:
+        """Placeholder test used to inspect pytest parametrization values."""
+        assert implementation() in {1, 2}
+
+    decorated = reference_impl.pytest_parametrize(parametrized, only_default=True)
+    selected = _parametrize_values(decorated, "implementation")[0]
+
+    assert selected == [
+        reference_impl.reference.implementation,
+        reference_impl.callable,
+    ]
+
+
+def test_select_parametrize_implementations_with_explicit_reference_default():
+    """Only-default parametrization does not duplicate an explicitly defaulted reference."""
+
+    @alternative.reference(default=True)
+    def reference_impl():
+        return 1
+
+    @reference_impl.add
+    def extra_impl():
+        return 2
+
+    def parametrized(implementation: Callable[[], int]) -> None:
+        """Placeholder test used to inspect pytest parametrization values."""
+        assert implementation() in {1, 2}
+
+    decorated = reference_impl.pytest_parametrize(parametrized, only_default=True)
+    selected = _parametrize_values(decorated, "implementation")[0]
+
+    assert selected == [reference_impl.reference.implementation]
+
+
+def test_pytest_parametrize_invokes_wrapped_test() -> None:
+    """Implementation parametrization delegates to the original test body."""
+
+    @alternative.reference
+    def reference_impl(value: int) -> int:
+        return value
+
+    def parametrized(implementation: Callable[[int], int], value: int) -> int:
+        """Placeholder test used to inspect direct decorated invocation."""
+        return implementation(value)
+
+    decorated = reference_impl.pytest_parametrize(parametrized)
+
+    assert inspect.signature(decorated) == inspect.signature(parametrized)
+    assert decorated(reference_impl, 3) == 3
 
 
 @pytest.mark.parametrize("only_default", [False, True])
