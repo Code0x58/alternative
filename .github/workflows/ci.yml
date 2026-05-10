@@ -47,6 +47,9 @@ jobs:
       - name: Pyrefly type check
         run: uv run --dev pyrefly check .
 
+      - name: Pyright type probe check
+        run: uv run --dev pyright typing_tests
+
       - name: Mypy type check
         run: uv run --dev mypy .
 
