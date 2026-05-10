@@ -42,12 +42,20 @@ runtime implementation:
 
 .. code-block:: python
 
-   @normalise_name.add(default=True)
-   def normalise_name_fast(name: str) -> str:
+   import alternative
+
+
+   @alternative.reference
+   def display_name(name: str) -> str:
+       return " ".join(part.capitalize() for part in name.split())
+
+
+   @display_name.add(default=True)
+   def display_name_fast(name: str) -> str:
        return name.title()
 
 
-   assert normalise_name("grace hopper") == "Grace Hopper"
+   assert display_name("grace hopper") == "Grace Hopper"
 
 Only one explicit default can be registered. This catches accidental import
 order changes where two modules both try to choose the active implementation.

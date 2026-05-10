@@ -90,6 +90,24 @@ to distinguish.
 Copying Implementations
 -----------------------
 
+.. invisible-code-block: python
+
+   import alternative
+
+   @alternative.reference
+   def source_alternatives() -> int:
+       return 1
+
+   @source_alternatives.add
+   def source_candidate() -> int:
+       return 2
+
+   @alternative.reference
+   def target() -> int:
+       return 10
+
+   source_implementation = source_alternatives.implementations[1]
+
 An :class:`alternative.Alternatives` object can be added to another alternatives
 set, which copies its underlying reference implementation:
 
