@@ -17,6 +17,8 @@ When optimizing a hot path, it’s common to accumulate:
 
 `alternative` keeps that workflow tidy by making implementation registration and selection first-class.
 
+The same model works for module functions, instance methods, class methods, and static methods. Public typing is shipped in [`alternative.pyi`](alternative.pyi), so type checkers and IDEs can see the original call signatures instead of losing them behind the decorator objects.
+
 ## Quick example
 
 ```python
@@ -45,23 +47,72 @@ assert constant_number() == 2
 assert unused_alternative_constant_number() == 3
 ```
 
+See the [quickstart](https://alternative.readthedocs.io/en/latest/quickstart.html) for registration patterns, defaults, and method examples.
+
+## Methods and descriptors
+
+Decorate instance methods directly. For `@classmethod` and `@staticmethod`, put `@alternative.reference` and `.add(...)` outside the built-in descriptor decorator:
+
+```python
+import alternative
+
+
+class Parser:
+    def __init__(self, value: str = ""):
+        self.value = value
+
+    @alternative.reference
+    def parse(self, value: str) -> int:
+        return int(value.strip())
+
+    @parse.add(default=True)
+    def parse_fast(self, value: str) -> int:
+        return int(value)
+
+    @alternative.reference
+    @classmethod
+    def from_text(cls, value: str) -> "Parser":
+        return cls(value.strip())
+
+    @from_text.add(default=True)
+    @classmethod
+    def from_text_fast(cls, value: str) -> "Parser":
+        return cls(value)
+
+    @alternative.reference
+    @staticmethod
+    def is_valid(value: str) -> bool:
+        return value.strip().isdigit()
+
+    @is_valid.add(default=True)
+    @staticmethod
+    def is_valid_fast(value: str) -> bool:
+        return value.isdigit()
+```
+
+Calling through an instance or class follows normal Python binding rules, and direct implementation calls bind the same way. The full descriptor examples are in [Use Methods](https://alternative.readthedocs.io/en/latest/quickstart.html#use-methods) and [Testing Methods](https://alternative.readthedocs.io/en/latest/pytest.html#testing-methods).
+
 ## Pytest features
 
-The examples directory includes practical pytest patterns that make this library shine.
+The pytest helpers are documented in the [pytest integration guide](https://alternative.readthedocs.io/en/latest/pytest.html).
 
 ### Pairwise equivalence checks
 
 Use `pytest_parametrize_pairs(...)` to compare the reference against each candidate implementation.
 
-- Basic pairwise checks: [`examples/test_measure.py`](examples/test_measure.py)
-- More configurable pairwise checks: [`examples/test_equivalence.py`](examples/test_equivalence.py)
+- [Equivalence Tests](https://alternative.readthedocs.io/en/latest/pytest.html#equivalence-tests)
+- [Reference Caching](https://alternative.readthedocs.io/en/latest/pytest.html#reference-caching)
 
 ### Single-implementation parametrization
 
 Use `pytest_parametrize(...)` to run one test body across all implementations.
 
-- Great for benchmark workflows with [`pytest-benchmark`](https://pypi.org/project/pytest-benchmark/): [`examples/test_benchmark.py`](examples/test_benchmark.py)
-- Useful for validating that every implementation passes one shared test suite
+- [Only the Default Implementation](https://alternative.readthedocs.io/en/latest/pytest.html#only-the-default-implementation)
+- [Benchmark All Implementations](https://alternative.readthedocs.io/en/latest/pytest.html#benchmark-all-implementations) with [`pytest-benchmark`](https://pypi.org/project/pytest-benchmark/)
+
+## Runtime tools
+
+`Alternatives.measure(...)` runs every implementation with the same arguments and measures the results with a callable you provide. See [Measure Implementations](https://alternative.readthedocs.io/en/latest/workflow.html#measure-implementations).
 
 ## Safety guarantees
 
@@ -75,3 +126,11 @@ The library tries to avoid unpleasant surprises caused by import order or accide
 Set `ALTERNATIVE_DEBUG=1` to record where critical state changes happened (like selecting defaults or inspecting implementations). These locations are surfaced in error messages to make stateful issues easier to track down.
 
 When debug mode is enabled, each `Implementation` also captures a label with its registration call-site. This label appears in `repr(...)` and selected debug errors, making it easier to disambiguate implementation instances.
+
+## Typing and IDEs
+
+`alternative` ships a top-level stub file, [`alternative.pyi`](alternative.pyi), for the public typing surface. It includes overloads for descriptor binding, transparent method/classmethod/staticmethod decoration, and the pytest helpers, while [`alternative.py`](alternative.py) stays focused on runtime behavior.
+
+The typing probes are checked with mypy, pyright, pyrefly, and a headless PyCharm inspection script: [`scripts/pycharm-type-probes.sh`](scripts/pycharm-type-probes.sh). The PyCharm probe covers type assertions, unresolved references, and type checker warnings in [`typing_tests/type_probes.py`](typing_tests/type_probes.py).
+
+Known PyCharm caveat: JetBrains `PyNestedDecoratorsInspection` currently reports a false-positive for correctly typed decorators stacked outside `@classmethod` or `@staticmethod`. Runtime behavior and type resolution are correct, and the project does not require `# noinspection PyTypeChecker` call-site suppressions for these examples.

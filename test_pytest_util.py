@@ -116,6 +116,23 @@ def test_select_parametrize_implementations_with_explicit_reference_default():
     assert selected == [reference_impl.reference.implementation]
 
 
+def test_pytest_parametrize_invokes_wrapped_test() -> None:
+    """Implementation parametrization delegates to the original test body."""
+
+    @alternative.reference
+    def reference_impl(value: int) -> int:
+        return value
+
+    def parametrized(implementation: Callable[[int], int], value: int) -> int:
+        """Placeholder test used to inspect direct decorated invocation."""
+        return implementation(value)
+
+    decorated = reference_impl.pytest_parametrize(parametrized)
+
+    assert inspect.signature(decorated) == inspect.signature(parametrized)
+    assert decorated(reference_impl, 3) == 3
+
+
 @pytest.mark.parametrize("only_default", [False, True])
 @pytest.mark.parametrize("double_reference", [False, True])
 def test_pytest_parametrize_pairs_signature_and_parameters(

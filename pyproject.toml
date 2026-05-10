@@ -70,7 +70,6 @@ include = [
     "/alternative.pyi",
     "/conftest.py",
     "/docs",
-    "/examples",
     "/LICENSE",
     "/pyproject.toml",
     "/README.md",
@@ -87,7 +86,7 @@ only-include = [
 ]
 
 [tool.pytest.ini_options]
-# do 5 rounds of 0.01 benchmarks, as the benchmarks are examples or very fast
+# keep benchmark-backed tests bounded when present
 addopts = "--cov=alternative --cov-report=html --benchmark-max-time=0.01"
 
 

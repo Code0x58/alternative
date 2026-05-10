@@ -251,6 +251,54 @@ def test_add_from_other_alternatives():
     assert f1.add(alt1) is not alt1
 
 
+def test_measure_sorts_sortable_measurements() -> None:
+    """Measurements are sorted by the measured value when the values are sortable."""
+
+    @alternative.reference
+    def make_four() -> str:
+        return "1 + 1 + 1 + 1"
+
+    @make_four.add
+    def make_four_factor() -> str:
+        return "2 * 2"
+
+    @make_four.add
+    def make_four_literal() -> str:
+        return "4"
+
+    measurements = make_four.measure(len)
+
+    assert list(measurements.items()) == [
+        (make_four_literal, 1),
+        (make_four_factor, 5),
+        (make_four.reference, 13),
+    ]
+
+
+def test_measure_preserves_registration_order_for_unsortable_measurements() -> None:
+    """Measurements keep registration order when the measured values cannot be sorted."""
+
+    @alternative.reference
+    def make_four() -> str:
+        return "1 + 1 + 1 + 1"
+
+    @make_four.add
+    def make_four_factor() -> str:
+        return "2 * 2"
+
+    @make_four.add
+    def make_four_literal() -> str:
+        return "4"
+
+    measurements = make_four.measure(lambda code: len(code) + 0j)
+
+    assert list(measurements.items()) == [
+        (make_four.reference, 13 + 0j),
+        (make_four_factor, 5 + 0j),
+        (make_four_literal, 1 + 0j),
+    ]
+
+
 def test_cross_owner_add_error():
     """Adding a cross-owner implementation raises a dedicated explicit error."""
 
