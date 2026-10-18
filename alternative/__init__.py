@@ -397,7 +397,8 @@ class Alternatives(_CallableMetadata, Generic[S, P, R, Q]):
     """Manage a reference, its candidates, and one stable runtime default.
 
     Usually created by :func:`reference`. Register every candidate before calling
-    the set, reading ``callable`` or ``implementations``, or collecting tests.
+    the set or ``measure()``, reading ``callable`` or ``implementations``, or
+    applying a pytest helper to a test function.
     """
 
     def __init__(
@@ -511,9 +512,11 @@ class Alternatives(_CallableMetadata, Generic[S, P, R, Q]):
 
     @property
     def callable(self) -> _ImplementationSource[P, R]:
-        """Return the active implementation.
+        """Return the selected callable and prevent further registration.
 
-        Setting the default implementation is disabled after this is accessed."""
+        Call this callable directly to use the selected implementation without
+        dispatch through the alternatives object.
+        """
         callable_ = self._callable
         if callable_ is None:
             # finalise the callable
@@ -565,13 +568,16 @@ class Alternatives(_CallableMetadata, Generic[S, P, R, Q]):
         *args: object,
         **kwargs: object,
     ) -> dict[Implementation[S, P, R, Q], M]:
-        """Invoke each implementation with the given parameters, then evaluate their results with the operator.
+        """Score each implementation's returned result with the given operator.
 
-        This is useful when comparing implementations that have different results, which can be compared by some cost.
-        For example, this can be used to compare the complexity of quantum circuits that implement the same function.
+        For example, use ``measure(len, data)`` to compare compressed output sizes
+        after checking that each implementation decodes to the original data.
+        This scores outputs; use a benchmark to measure elapsed time.
 
-        The results are sorted by the operator's result if the result is sortable (i.e. does not raise TypeError when
-        __lt__(a,b) is called); otherwise they are returned in the order of the implementations.
+        Return a dictionary keyed by Implementation objects, ordered by ascending
+        score when scores are sortable, or by registration order otherwise.
+        Arguments are shared without copying. Measurement freezes registration
+        and keeps the selected default unchanged.
         """
         return self._measure(operator, args, kwargs, instance=None, owner=None)
 
@@ -664,8 +670,10 @@ class Alternatives(_CallableMetadata, Generic[S, P, R, Q]):
         """Decorator to parametrise a test function with the reference and alternative implementations.
 
         :parameter test: Inner pytest function to parameterise with reference and alternative implementations - this is elided if using the decorator syntax.
-        :parameter n_cache: Passed to lru_cache which wraps the reference implementation.
-            Use a positive size or None to cache reusable results; 0 disables caching.
+        :parameter n_cache: Number of reusable reference results to cache.
+            Use a positive size for a bounded cache, None for an unbounded cache,
+            or 0 to disable caching. Cached calls require hashable arguments and
+            results that are safe to share.
         :parameter double_reference: If True, the reference implementation will be included in the implementations. This
             can be used for sanity-checking equivalence tests.
         :parameter only_default: If True, only the default implementation will be used as the other implementation. If
@@ -837,7 +845,8 @@ def reference(
     :param default: Make the reference the explicit default, preventing another
         registration from selecting a default.
     :returns: An Alternatives wrapper, or a decorator returning one when called
-        without an implementation. Call signatures are preserved by the stubs.
+        without an implementation. Decorated callables keep their typed call
+        signatures for normal calls and code completion.
     """
     if isinstance(implementation, _Undefined):
 

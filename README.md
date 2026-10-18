@@ -82,5 +82,5 @@ Register every candidate before calling the alternatives object or applying a py
 - [Pytest integration](https://alternative.readthedocs.io/en/latest/pytest.html) and [testing contracts](https://alternative.readthedocs.io/en/latest/testing-contracts.html): expected results, mutation, exceptions, async tests, and reference caching.
 - [Methods](https://alternative.readthedocs.io/en/latest/methods.html): instance, class, and static methods and decorator order.
 - [Runtime workflow](https://alternative.readthedocs.io/en/latest/workflow.html): registration rules, debugging, and scoring returned results with `.measure(...)`.
-- [Call overhead](https://alternative.readthedocs.io/en/latest/performance.html): timing the production entry point as well as its underlying algorithm.
+- [Performance and when to use it](https://alternative.readthedocs.io/en/latest/performance.html): rough overhead budgets and timing the production call path.
 - [API and IDE compatibility](https://alternative.readthedocs.io/en/latest/api.html) and [contributing](https://alternative.readthedocs.io/en/latest/contributing.html).

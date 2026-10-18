@@ -9,7 +9,7 @@ After :doc:`quickstart`, use this layout when implementations and tests need
 separate modules. Create an ``optimise_totals/`` directory containing the four
 files below. You can also copy the `example directory from the source repository
 <https://github.com/Code0x58/alternative/tree/master/docs/examples/optimise_totals>`_.
-The example is included in source distributions and tested in this repository.
+Each file is shown below, so a repository checkout is optional.
 
 .. code-block:: text
 
@@ -60,14 +60,13 @@ Separate benchmark tests measure algorithms and the production entry point:
 .. literalinclude:: examples/optimise_totals/test_totals.py
    :language: python
 
-From this repository, run the example with:
+From the directory containing ``optimise_totals/``, install the library and test
+tools, then run the tests:
 
 .. code-block:: console
 
-   $ uv run --dev pytest docs/examples/optimise_totals --verbosity=2
-
-For an independent project, install ``alternative``, ``pytest``, and
-``pytest-benchmark``, then run ``pytest optimise_totals``.
+   $ pip install alternative pytest pytest-benchmark
+   $ pytest optimise_totals
 
 To promote a different candidate, move ``default=True`` to its registration in
 source and rerun a fresh process. Collection and measurement already freeze the

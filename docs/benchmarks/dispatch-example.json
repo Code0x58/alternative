@@ -1,0 +1,62 @@
+{
+  "python": "3.12.7",
+  "implementation": "CPython",
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+  "number": 100000,
+  "repeat": 7,
+  "measurements": {
+    "raw_function": {
+      "minimum_ns": 36.92285012220964,
+      "median_ns": 37.147239927435294
+    },
+    "implicit_default": {
+      "minimum_ns": 362.4203499930445,
+      "median_ns": 372.50408000545576
+    },
+    "explicit_default": {
+      "minimum_ns": 361.320059892023,
+      "median_ns": 371.57049009692855
+    },
+    "implementation": {
+      "minimum_ns": 354.1411100013647,
+      "median_ns": 364.32073000469245
+    },
+    "resolved_callable": {
+      "minimum_ns": 36.838939995504916,
+      "median_ns": 37.00433997437358
+    },
+    "raw_bound_method": {
+      "minimum_ns": 40.54951001307927,
+      "median_ns": 40.60260995174758
+    },
+    "bound_instance": {
+      "minimum_ns": 354.38210994470865,
+      "median_ns": 360.85035986616276
+    },
+    "bound_class": {
+      "minimum_ns": 354.50120994937606,
+      "median_ns": 359.182870015502
+    },
+    "bound_static": {
+      "minimum_ns": 334.58374004112557,
+      "median_ns": 339.78831008425914
+    },
+    "raw_lookup": {
+      "minimum_ns": 39.61503010941669,
+      "median_ns": 39.74121995270252
+    },
+    "instance_lookup": {
+      "minimum_ns": 2344.166710099671,
+      "median_ns": 2359.814910014393
+    },
+    "factory_lookup": {
+      "minimum_ns": 2420.765169954393,
+      "median_ns": 2653.7320399074815
+    },
+    "static_lookup": {
+      "minimum_ns": 2333.9564799971413,
+      "median_ns": 2380.2901500312146
+    }
+  },
+  "description": "Illustrative warmed dispatch costs; not a performance guarantee."
+}

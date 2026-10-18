@@ -55,43 +55,27 @@ Exceptions
 Typing and IDEs
 ---------------
 
+Decorated functions keep their declared parameter and return types, including
+parameter names, defaults, and keyword-only arguments. You can register
+candidates and select a default in registration code while callers keep the
+same typed interface and code completion. Keep using ordinary function
+annotations.
+
 Candidates must accept all calls permitted by the reference and return a
-compatible type. Runtime registration does not enforce this contract; use a
-type checker to validate candidates.
+compatible type. Mypy, Pyright, and Pyrefly check these requirements; runtime
+registration does not validate signatures. Annotations describe accepted calls,
+while your tests establish behavioral equivalence.
 
-The stubs preserve parameter names, defaults, keyword-only arguments, and
-return types in mypy, Pyright, and Pyrefly. Instance and class access bind method
-receivers; an ordinary function accepting ``type[T]`` still requires that argument.
+Methods keep normal receiver binding. An instance supplies ``self``, and a class
+method supplies ``cls``; ordinary function arguments remain explicit. See
+:doc:`methods` for examples.
 
-Runtime wrappers preserve the original name, documentation, annotations, and
-``__wrapped__`` link. :func:`inspect.signature` follows that link, including
-receiver binding on method access. Inspecting metadata does not freeze
-registration. The alternatives object describes the reference's public contract;
-each candidate wrapper describes its own implementation.
+Runtime tools such as :func:`inspect.signature` also see the original signature,
+name, and documentation. The alternatives object describes the reference's
+public contract, and each candidate describes its own implementation. Inspecting
+this metadata does not freeze registration.
 
-Normally, let the decorators infer wrapper types; no extra annotations are
-needed at call sites. For explicit wrapper annotations and the generic parameter
-model, see :ref:`typing-model`.
-
-PyCharm compatibility
----------------------
-
-PyCharm 2026.2.3 has three known ParamSpec-related gaps:
-
-.. list-table:: Recognised PyCharm gaps
-   :header-rows: 1
-   :widths: 35 65
-
-   * - Call shape
-     - Incorrect IDE behaviour
-   * - Keyword calls through decorator objects
-     - Widens a concrete return type with ``Any``.
-   * - ``*args`` and ``**kwargs``
-     - Checks individual arguments against tuple or dictionary container types.
-   * - Instance and class methods
-     - Retains a bound ``self`` or ``cls`` parameter.
-
-These are IDE diagnostic limitations; they do not change runtime binding.
-Mypy, Pyright, and Pyrefly check the affected call shapes. See
-:ref:`pycharm-typing-checks` for reproductions, related JetBrains reports, and the
-contributor workflow for tracking expected diagnostics.
+Some IDEs can report incorrect warnings for decorated keyword calls or bound
+methods. If your IDE and type checker disagree, `report a minimal example
+<https://github.com/Code0x58/alternative/issues>`_. These diagnostic limitations
+do not change runtime calls.
