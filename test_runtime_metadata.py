@@ -1,6 +1,7 @@
 """Verify signatures and documentation survive registration and binding."""
 
 import inspect
+import sys
 from functools import partial
 
 import pytest
@@ -75,6 +76,8 @@ def test_bound_metadata_preserves_receiver_signatures(method_name: str) -> None:
         assert inspect.signature(target) == inspect.signature(expected)
         assert inspect.signature(direct) == inspect.signature(expected)
         assert target.__doc__ == direct.__doc__ == raw.__doc__
+        assert inspect.get_annotations(target) == inspect.get_annotations(raw)
+        assert inspect.get_annotations(direct) == inspect.get_annotations(raw)
     descriptor.add(descriptor.reference.implementation)
 
 
@@ -84,6 +87,7 @@ def test_incomplete_callable_metadata_does_not_prevent_registration(source) -> N
     wrapped = alternative.reference(source)
     assert inspect.unwrap(wrapped) is source
     assert wrapped.__doc__ == source.__doc__
+    assert wrapped.__annotations__ == {}
 
 
 def test_metadata_does_not_copy_implementation_state() -> None:
@@ -96,3 +100,18 @@ def test_metadata_does_not_copy_implementation_state() -> None:
     original.__dict__["add"] = "unrelated function attribute"
     wrapped = alternative.reference(original)
     wrapped.add(lambda: 1)
+
+
+@pytest.mark.skipif(sys.version_info < (3, 14), reason="Requires deferred annotations")
+def test_deferred_annotations_are_not_evaluated_during_registration() -> None:
+    """A class can refer to itself before its decorator has finished executing."""
+
+    class Example:
+        """Refer to this class in an unevaluated return annotation."""
+
+        @alternative.reference
+        def method(self) -> Example:  # noqa: F821 - evaluated lazily on Python 3.14+
+            """Return this instance."""
+            return self
+
+    assert inspect.get_annotations(Example().method)["return"] is Example

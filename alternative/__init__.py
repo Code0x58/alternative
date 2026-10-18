@@ -152,6 +152,16 @@ def _bind_test_implementation(
     return _bind_implementation(implementation, instance, owner)
 
 
+class _CallableMetadata:
+    """Resolve annotations lazily on the original callable across Python versions."""
+
+    def __getattribute__(self, name: str) -> object:
+        if name == "__annotations__":
+            source = object.__getattribute__(self, "__wrapped__")
+            return getattr(source, name, {})
+        return object.__getattribute__(self, name)
+
+
 def _set_wrapper_metadata(
     wrapper: object, implementation: _ImplementationSource[P, R]
 ) -> None:
@@ -162,6 +172,8 @@ def _set_wrapper_metadata(
         else implementation
     )
     for name in WRAPPER_ASSIGNMENTS:
+        if name == "__annotations__":
+            continue
         try:
             value = getattr(source, name)
         except AttributeError:
@@ -171,7 +183,7 @@ def _set_wrapper_metadata(
 
 
 @dataclasses.dataclass(frozen=True)
-class _BoundAlternatives(Generic[S, P, R, Q]):
+class _BoundAlternatives(_CallableMetadata, Generic[S, P, R, Q]):
     alternatives: Alternatives[S, P, R, Q]
     instance: object | None
     owner: type[object] | None
@@ -249,7 +261,7 @@ class _BoundAlternatives(Generic[S, P, R, Q]):
 
 
 @dataclasses.dataclass(frozen=True)
-class _BoundImplementation(Generic[S, P, R, Q]):
+class _BoundImplementation(_CallableMetadata, Generic[S, P, R, Q]):
     implementation: Implementation[S, P, R, Q]
     instance: object | None
     owner: type[object] | None
@@ -283,7 +295,7 @@ class _BoundImplementation(Generic[S, P, R, Q]):
         return add(implementation, default=default)
 
 
-class Alternatives(Generic[S, P, R, Q]):
+class Alternatives(_CallableMetadata, Generic[S, P, R, Q]):
     def __init__(
         self,
         implementation: _ImplementationSource[P, R],
@@ -627,7 +639,7 @@ class Alternatives(Generic[S, P, R, Q]):
 
 
 @dataclasses.dataclass(frozen=True)
-class Implementation(Generic[S, P, R, Q]):
+class Implementation(_CallableMetadata, Generic[S, P, R, Q]):
     alternatives: Alternatives[S, P, R, Q]
     implementation: _ImplementationSource[P, R]
     label: str | None = None

@@ -104,7 +104,6 @@ class MultipleDefaultsError(AlternativeError):
 class CrossAlternativesImplementationError(AlternativeError):
     """Cannot add an Implementation object that belongs to a different Alternatives set."""
 
-@type_check_only
 class _CallableMetadata:
     """Describe the standard metadata preserved on callable wrappers."""
 
@@ -114,6 +113,7 @@ class _CallableMetadata:
     __module__: str
     __doc__: str | None
     __annotations__: dict[str, object]
+    def __getattribute__(self, name: str) -> object: ...
 
 @type_check_only
 class _PytestDecorators:
