@@ -7,6 +7,12 @@ The stubs preserve parameter names, defaults, keyword-only arguments, and
 return types in mypy, Pyright, and Pyrefly. Instance and class access bind method
 receivers; an ordinary function accepting ``type[T]`` still requires that argument.
 
+Runtime wrappers preserve the original name, documentation, annotations, and
+``__wrapped__`` link. :func:`inspect.signature` follows that link, including
+receiver binding on method access. Inspecting metadata does not freeze
+registration. The alternatives object describes the reference's public contract;
+each candidate wrapper describes its own implementation.
+
 Wrapper types now carry both the bound and complete parameter lists:
 ``Alternatives[S, P, R, Q]`` and ``Implementation[S, P, R, Q]``. For explicit
 annotations, append the original signature as ``Q``. For example,

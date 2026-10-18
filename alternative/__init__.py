@@ -4,7 +4,7 @@ import dataclasses
 import inspect
 import os
 from collections.abc import Callable
-from functools import lru_cache, wraps
+from functools import WRAPPER_ASSIGNMENTS, lru_cache, wraps
 from types import FrameType
 from typing import (
     Final,
@@ -152,11 +152,50 @@ def _bind_test_implementation(
     return _bind_implementation(implementation, instance, owner)
 
 
+class _CallableMetadata:
+    """Resolve annotations lazily on the original callable across Python versions."""
+
+    def __getattribute__(self, name: str) -> object:
+        if name == "__annotations__":
+            source = object.__getattribute__(self, "__wrapped__")
+            return getattr(source, name, {})
+        return object.__getattribute__(self, name)
+
+
+def _set_wrapper_metadata(
+    wrapper: object, implementation: _ImplementationSource[P, R]
+) -> None:
+    """Preserve inspectable metadata without copying implementation attributes."""
+    source = (
+        implementation.__func__
+        if isinstance(implementation, (classmethod, staticmethod))
+        else implementation
+    )
+    for name in (*WRAPPER_ASSIGNMENTS, "__annotations__"):
+        if name == "__annotations__":
+            continue
+        try:
+            value = getattr(source, name)
+        except AttributeError:
+            continue
+        object.__setattr__(wrapper, name, value)
+    object.__setattr__(wrapper, "__wrapped__", source)
+
+
 @dataclasses.dataclass(frozen=True)
-class _BoundAlternatives(Generic[S, P, R, Q]):
+class _BoundAlternatives(_CallableMetadata, Generic[S, P, R, Q]):
     alternatives: Alternatives[S, P, R, Q]
     instance: object | None
     owner: type[object] | None
+
+    def __post_init__(self) -> None:
+        """Expose the reference's signature with this receiver already bound."""
+        _set_wrapper_metadata(
+            self,
+            _bind_implementation(
+                self.alternatives.reference.implementation, self.instance, self.owner
+            ),
+        )
 
     def __call__(self, /, *args: object, **kwargs: object) -> R:
         implementation: Callable[..., R] = _bind_implementation(
@@ -222,10 +261,19 @@ class _BoundAlternatives(Generic[S, P, R, Q]):
 
 
 @dataclasses.dataclass(frozen=True)
-class _BoundImplementation(Generic[S, P, R, Q]):
+class _BoundImplementation(_CallableMetadata, Generic[S, P, R, Q]):
     implementation: Implementation[S, P, R, Q]
     instance: object | None
     owner: type[object] | None
+
+    def __post_init__(self) -> None:
+        """Expose this implementation's bound signature and documentation."""
+        _set_wrapper_metadata(
+            self,
+            _bind_implementation(
+                self.implementation.implementation, self.instance, self.owner
+            ),
+        )
 
     def __call__(self, /, *args: object, **kwargs: object) -> R:
         implementation: Callable[..., R] = _bind_implementation(
@@ -247,13 +295,14 @@ class _BoundImplementation(Generic[S, P, R, Q]):
         return add(implementation, default=default)
 
 
-class Alternatives(Generic[S, P, R, Q]):
+class Alternatives(_CallableMetadata, Generic[S, P, R, Q]):
     def __init__(
         self,
         implementation: _ImplementationSource[P, R],
         *,
         default: bool = False,
     ):
+        _set_wrapper_metadata(self, implementation)
         imp = Implementation(self, implementation, label=_maybe_get_caller_path())
         self._reference = imp
         # tracks the active implementation
@@ -590,12 +639,13 @@ class Alternatives(Generic[S, P, R, Q]):
 
 
 @dataclasses.dataclass(frozen=True)
-class Implementation(Generic[S, P, R, Q]):
+class Implementation(_CallableMetadata, Generic[S, P, R, Q]):
     alternatives: Alternatives[S, P, R, Q]
     implementation: _ImplementationSource[P, R]
     label: str | None = None
 
     def __post_init__(self):
+        _set_wrapper_metadata(self, self.implementation)
         if self.label is None:
             object.__setattr__(self, "label", _maybe_get_caller_path())
 

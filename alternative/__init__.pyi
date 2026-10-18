@@ -104,6 +104,17 @@ class MultipleDefaultsError(AlternativeError):
 class CrossAlternativesImplementationError(AlternativeError):
     """Cannot add an Implementation object that belongs to a different Alternatives set."""
 
+class _CallableMetadata:
+    """Describe the standard metadata preserved on callable wrappers."""
+
+    __wrapped__: object
+    __name__: str
+    __qualname__: str
+    __module__: str
+    __doc__: str | None
+    __annotations__: dict[str, object]
+    def __getattribute__(self, name: str) -> object: ...
+
 @type_check_only
 class _PytestDecorators:
     """Preserve test function types for both parametrization APIs."""
@@ -131,7 +142,7 @@ class _PytestDecorators:
         only_default: bool = False,
     ) -> _F: ...
 
-class _BoundAlternatives(_PytestDecorators, Generic[_S, _P, _R, _Q]):
+class _BoundAlternatives(_CallableMetadata, _PytestDecorators, Generic[_S, _P, _R, _Q]):
     __match_args__ = ("alternatives", "instance", "owner")
     alternatives: Alternatives[_S, _P, _R, _Q]
     instance: object | None
@@ -146,6 +157,7 @@ class _BoundAlternatives(_PytestDecorators, Generic[_S, _P, _R, _Q]):
         instance: object | None,
         owner: type[object] | None,
     ) -> None: ...
+    def __post_init__(self) -> None: ...
     @overload
     def __call__(self: _BoundAlternatives[_S, [], _R, _Q], /) -> _R: ...
     @overload
@@ -208,7 +220,7 @@ class _BoundAlternatives(_PytestDecorators, Generic[_S, _P, _R, _Q]):
     @property
     def callable(self) -> Callable[_Q, _R] | _TypedDescriptor[_P, _R]: ...
 
-class _BoundImplementation(Generic[_S, _P, _R, _Q]):
+class _BoundImplementation(_CallableMetadata, Generic[_S, _P, _R, _Q]):
     __match_args__ = ("implementation", "instance", "owner")
     implementation: Implementation[_S, _P, _R, _Q]
     instance: object | None
@@ -223,6 +235,7 @@ class _BoundImplementation(Generic[_S, _P, _R, _Q]):
         instance: object | None,
         owner: type[object] | None,
     ) -> None: ...
+    def __post_init__(self) -> None: ...
     def __call__(self, /, *args: _P.args, **kwargs: _P.kwargs) -> _R: ...
     @overload
     def add(
@@ -245,7 +258,7 @@ class _BoundImplementation(Generic[_S, _P, _R, _Q]):
     @property
     def alternatives(self) -> Alternatives[_S, _P, _R, _Q]: ...
 
-class Alternatives(_PytestDecorators, Generic[_S, _P, _R, _Q]):
+class Alternatives(_CallableMetadata, _PytestDecorators, Generic[_S, _P, _R, _Q]):
     _reference: Implementation[_S, _P, _R, _Q]
     _default: Implementation[_S, _P, _R, _Q] | None
     _debug_default: str | None
@@ -358,7 +371,7 @@ class Alternatives(_PytestDecorators, Generic[_S, _P, _R, _Q]):
         **kwargs: _Q.kwargs,
     ) -> dict[Implementation[_S, _P, _R, _Q], _M]: ...
 
-class Implementation(Generic[_S, _P, _R, _Q]):
+class Implementation(_CallableMetadata, Generic[_S, _P, _R, _Q]):
     __match_args__ = ("alternatives", "implementation", "label")
     alternatives: Alternatives[_S, _P, _R, _Q]
     implementation: _ImplementationSource[_P, _R]
