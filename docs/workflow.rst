@@ -135,3 +135,12 @@ want to clone the raw callable:
    target.add(source_implementation.implementation)
 
 This distinction avoids accidentally wiring one alternatives set into another.
+
+Typing registrations
+--------------------
+
+Candidates must accept every call allowed by the reference and return a
+compatible type. This applies to ``.add(candidate)``, ``@reference.add``, and
+``@reference.add(default=True)``. Preserve parameter names and defaults when
+callers use them; broader parameter types and additional optional arguments are
+allowed. The checkers validate signatures without executing registrations.

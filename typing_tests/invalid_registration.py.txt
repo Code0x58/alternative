@@ -1,0 +1,61 @@
+"""Registration must preserve every call accepted by the reference."""
+
+import alternative
+
+
+@alternative.reference
+def reference(count: int, *, label: str = 'a') -> str:
+    """Return a repeated label."""
+    return count * label
+
+
+def wrong_parameter(count: str, *, label: str = 'a') -> str:
+    """Accept an incompatible count."""
+    return count + label
+
+
+def missing_default(count: int, *, label: str) -> str:
+    """Reject calls that omit a defaulted reference argument."""
+    return count * label
+
+
+def wrong_name(count: int, *, title: str = 'a') -> str:
+    """Use a keyword the reference does not accept."""
+    return count * title
+
+
+def wrong_return(count: int, *, label: str = 'a') -> int:
+    """Return a different result type."""
+    return count
+
+
+reference.add(wrong_parameter)  # error
+reference.add()(wrong_parameter)  # error
+reference.add(default=True)(wrong_parameter)  # error
+reference.add(default=False)(missing_default)  # error
+reference.add(default=True)(wrong_name)  # error
+reference.add(default=True)(wrong_return)  # error
+reference.reference.add(default=True)(wrong_parameter)  # error
+
+
+class Methods:
+    """Keep receiver-bound registration just as strict."""
+
+    @alternative.reference
+    def method(self, count: int) -> str:
+        """Convert a count."""
+        return str(count)
+
+    @method.add
+    def candidate(self, count: int) -> str:
+        """Supply another implementation."""
+        return str(count)
+
+
+def wrong_method(self: Methods, count: str) -> str:
+    """Reject the reference's integer argument."""
+    return count
+
+
+Methods().method.add(default=True)(wrong_method)  # error
+Methods().candidate.add(default=True)(wrong_method)  # error
