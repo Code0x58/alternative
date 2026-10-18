@@ -34,7 +34,8 @@ to a test function, and reading ``callable`` or ``implementations`` all freeze t
 set. Test decorators usually run while pytest imports test modules for
 collection. You cannot measure candidates and then register the winner as a
 default in that same set. Selecting a default from startup configuration is
-possible if it is read before any of these operations. See :doc:`tutorial` for a complete package split across files.
+possible if it is read before any of these operations. See :doc:`tutorial` for
+a complete package split across files.
 
 .. _measure-implementations:
 
@@ -197,15 +198,15 @@ raw callable:
 
 This distinction avoids accidentally wiring one alternatives set into another.
 
-Typing Registrations
---------------------
+Typed Calls
+-----------
 
 Candidates must accept every call allowed by the reference and return a
 compatible type. This applies to ``.add(candidate)``, ``@reference.add``, and
 ``@reference.add(default=True)``. Preserve parameter names and defaults when
 callers use them; broader parameter types and additional optional arguments are
-allowed. The checkers validate signatures without executing registrations.
+allowed. Your callers retain the reference's typed interface when you change
+which implementation they use.
 
-Runtime registration does not check signature compatibility. Run a type checker
-to catch incompatible candidates before running the program. See :doc:`api` for
-typing and IDE compatibility.
+Run a type checker to catch incompatible candidates; runtime registration does
+not validate signatures. See :ref:`typing-and-ides` for typing and IDE support.

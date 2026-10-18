@@ -34,8 +34,9 @@ and ``pytest-benchmark`` for the benchmark fixture:
 For async tests, also install ``pytest-asyncio`` or another async pytest plugin;
 see :ref:`async-tests`.
 
-The installed package includes type stubs and a ``py.typed`` marker, so type
-checkers can use its annotations without additional configuration.
+Decorated functions retain their typed call signatures and return types, so
+callers keep normal type checking and code completion while you register and
+select implementations. No extra typing configuration is needed.
 
 A First Example
 ---------------

@@ -1,75 +1,83 @@
-Call Overhead
-=============
+Performance and When to Use It
+==============================
 
-Implementation choice adds dispatch work to each call. Benchmark realistic input
-sizes as well as individual calls: a faster implementation must save more time
-than the wrapper adds. :meth:`alternative.Alternatives.measure` scores returned
-results; use a timing tool such as ``pytest-benchmark`` to measure elapsed time.
+Use ``alternative`` to keep a trusted reference, test candidate implementations
+consistently, and choose a default without changing application callers. Each
+call through the alternatives object adds some dispatch work. Include that cost
+when deciding whether a candidate improves performance.
+
+A Rough Overhead Budget
+-----------------------
+
+Functions doing tens of microseconds or more of work per call are a useful
+starting point: dispatch is usually a small part of their total time. For
+functions taking only a few microseconds, compare the full application call
+before adopting a rewrite. The savings may be smaller than the added dispatch.
+
+The following rounded costs illustrate the scale, based on warmed calls to a
+trivial integer function in one CPython run:
+
+.. list-table:: Approximate added cost per call
+   :header-rows: 1
+
+   * - Application call pattern
+     - Added cost
+     - Work per call for roughly 5% overhead
+   * - Function, or a bound method saved before a loop
+     - 0.4 microseconds
+     - 10 microseconds
+   * - Method looked up on the instance for every call
+     - 2–3 microseconds
+     - 50 microseconds
+
+These are planning estimates, not guarantees for another interpreter, machine,
+or workload. The :download:`example measurements <benchmarks/dispatch-example.json>`
+include the environment and raw timings. They exclude registration and first-use
+setup. Measure startup separately if it matters to your application.
+
+For a 5% overhead budget, aim for the implementation's own work to take at least
+20 times the extra call cost. For a speed improvement, the candidate's time plus
+dispatch must be less than the original call's time. For example, reducing
+50 microseconds of work to 40 microseconds leaves room for 0.4 microseconds of
+dispatch. Reducing 1 microsecond to 0.8 microseconds does not.
+
+The registration and test helpers can still be useful for comparing very small
+functions. Choose the production call path separately if every fraction of a
+microsecond matters.
 
 Benchmark Your Application
 --------------------------
 
-Keep equivalence tests and production-path benchmarks separate. Pytest helpers
-inject underlying implementations to compare algorithm costs. Also benchmark
-the public decorated callable when assessing the end-to-end production benefit.
+Use realistic inputs and benchmark both the underlying implementations and the
+public decorated callable. The pytest helpers supply underlying implementations,
+so their timings compare algorithms. A separate benchmark of the decorated
+entry point includes dispatch and shows what application callers experience.
+See :doc:`tutorial` for both tests in a runnable example.
 
-For a repeated method call, keep ``call = instance.method`` outside the loop to
-avoid constructing another view for every iteration. For module functions,
-holding ``function.callable`` bypasses the alternatives wrapper; accessing it
-freezes registration. For methods, hold the bound method view so its receiver
-continues to bind normally.
+For repeated method calls, save ``call = instance.method`` before the loop and
+invoke ``call(...)`` inside it to avoid repeated lookup. For a module function,
+``call = function.callable`` gives direct access to the selected implementation.
+Read it after registering all candidates: doing so freezes registration and
+keeps that selection stable. For methods, save the bound method so Python still
+supplies the receiver normally.
 
-Reproduce the Dispatch Benchmark
---------------------------------
+:meth:`alternative.Alternatives.measure` scores returned results, such as
+compressed output sizes. Use a timing tool such as ``pytest-benchmark`` to
+measure elapsed time.
 
-From a development checkout, run:
+Measure Dispatch in Your Environment
+------------------------------------
+
+The source checkout includes a small dispatch benchmark. With ``alternative``
+installed in your Python environment, run:
 
 .. code-block:: console
 
-   $ uv run --dev python scripts/benchmark_call_overhead.py --number 50000 --repeat 7
+   $ python scripts/benchmark_call_overhead.py --number 100000 --repeat 7
 
-Add ``--json`` for machine-readable minimum and median nanoseconds per call.
-Each case performs the same integer increment. Registration and first-call
-selection happen before timing. ``timeit`` disables garbage collection during
-each repeat. Held bound views and attribute lookup followed by a call are
-separate cases, because lookup constructs a new descriptor view.
-
-Recorded Dispatch Measurements
-------------------------------
-
-This historical comparison records the dispatch optimization in
-`PR #36 <https://github.com/Code0x58/alternative/pull/36>`_. Minimum times were
-measured on 18 October 2026 with CPython 3.12.7 on Linux x86-64, using seven
-sequential repeats of 50,000 calls per case. The baseline is revision
-``3549e52``; the optimized column uses the implementation accompanying that PR.
-These values describe one environment, rather than guarantee current timings
-on other Python versions or machines. Run the script above for your checkout.
-
-.. list-table:: Microseconds per warmed call
-   :header-rows: 1
-
-   * - Case
-     - Original ``3549e52``
-     - Optimized
-   * - Raw function
-     - 0.037
-     - 0.037
-   * - Implicit default
-     - 1.886
-     - 0.379
-   * - Explicit default
-     - 0.992
-     - 0.374
-   * - Held bound instance method
-     - 3.642
-     - 0.352
-   * - Instance method lookup and call
-     - 4.210
-     - 2.496
-
-The complete environment details and case measurements are available as
-:download:`JSON <benchmarks/call-overhead-20261018.json>`.
-
-The JSON also preserves an intermediate development revision. See
-:ref:`dispatch-implementation-notes` for implementation details of the
-optimization.
+Add ``--json`` for environment details and minimum and median nanoseconds per
+call. The script times the same integer increment through ordinary and
+decorated call paths, with registration and first-use setup completed before
+timing. It measures saved bound methods separately from method lookup on every
+call. These small-call measurements help estimate overhead; application
+benchmarks determine whether the library fits your workload.

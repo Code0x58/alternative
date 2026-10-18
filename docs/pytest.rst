@@ -215,8 +215,8 @@ caller's behalf.
 Reference Caching
 -----------------
 
-The ``n_cache`` argument is passed to :func:`functools.lru_cache` for the
-reference callable used in pairwise tests:
+Use ``n_cache`` to reuse reference results across pairwise comparisons when the
+reference is expensive and its results are safe to share:
 
 .. code-block:: python
 
