@@ -171,7 +171,7 @@ def _set_wrapper_metadata(
         if isinstance(implementation, (classmethod, staticmethod))
         else implementation
     )
-    for name in WRAPPER_ASSIGNMENTS:
+    for name in (*WRAPPER_ASSIGNMENTS, "__annotations__"):
         if name == "__annotations__":
             continue
         try:
