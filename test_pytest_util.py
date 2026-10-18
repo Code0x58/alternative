@@ -1,8 +1,9 @@
 import inspect
 from collections.abc import Callable
 
-import alternative
 import pytest
+
+import alternative
 
 
 @alternative.reference

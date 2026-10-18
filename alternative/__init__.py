@@ -3,19 +3,17 @@ from __future__ import annotations
 import dataclasses
 import inspect
 import os
-from functools import wraps, lru_cache
+from collections.abc import Callable
+from functools import lru_cache, wraps
 from types import FrameType
 from typing import (
-    Callable,
     Final,
     Generic,
     ParamSpec,
     Protocol,
-    Type,
     TypeVar,
     cast,
 )
-
 
 DEBUG = os.environ.get("ALTERNATIVE_DEBUG", "0").lower() in (
     "1",
@@ -27,13 +25,13 @@ DEBUG = os.environ.get("ALTERNATIVE_DEBUG", "0").lower() in (
 
 
 __all__ = [
-    "reference",
-    "Alternatives",
-    "Implementation",
-    "AlternativeError",
     "AddTooLateError",
-    "MultipleDefaultsError",
+    "AlternativeError",
+    "Alternatives",
     "CrossAlternativesImplementationError",
+    "Implementation",
+    "MultipleDefaultsError",
+    "reference",
 ]
 
 
@@ -61,7 +59,7 @@ class _NoReceiver:
 
 class _TypedDescriptor(Protocol[P, R_co]):
     def __get__(
-        self, instance: object | None, owner: Type[object] | None = None, /
+        self, instance: object | None, owner: type[object] | None = None, /
     ) -> Callable[P, R_co]: ...
 
 
@@ -125,7 +123,7 @@ def _maybe_get_caller_path() -> str | None:
 def _bind_implementation(
     implementation: Callable[..., R] | _TypedDescriptor[P, R],
     instance: object | None,
-    owner: Type[object] | None,
+    owner: type[object] | None,
 ) -> Callable[..., R]:
     """Bind an implementation using descriptor semantics when available."""
     if owner is None and instance is not None:
@@ -139,7 +137,7 @@ def _bind_implementation(
 def _bind_test_implementation(
     implementation: Callable[..., R] | _TypedDescriptor[P, R],
     instance: object | None,
-    owner: Type[object] | None,
+    owner: type[object] | None,
 ) -> Callable[..., R]:
     """Bind test parameters, or unwrap descriptors that need an explicit receiver."""
     if owner is None:
@@ -157,7 +155,7 @@ def _bind_test_implementation(
 class _BoundAlternatives(Generic[S, P, R]):
     alternatives: Alternatives[S, P, R]
     instance: object | None
-    owner: Type[object] | None
+    owner: type[object] | None
 
     def __call__(self, *args: object, **kwargs: object) -> R:
         implementation: Callable[..., R] = _bind_implementation(
@@ -193,7 +191,8 @@ class _BoundAlternatives(Generic[S, P, R]):
         only_default: bool = False,
     ) -> F | Callable[[F], F]:
         """Parametrize tests with implementations bound to this receiver."""
-        return self.alternatives._pytest_parametrize(
+        # Dataclass instance fields store descriptors without invoking __get__.
+        return cast(Alternatives[S, P, R], self.alternatives)._pytest_parametrize(
             test,
             only_default=only_default,
             instance=self.instance,
@@ -209,7 +208,7 @@ class _BoundAlternatives(Generic[S, P, R]):
         only_default: bool = False,
     ) -> F | Callable[[F], F]:
         """Compare implementations bound to this receiver with a cached reference."""
-        return self.alternatives._pytest_parametrize_pairs(
+        return cast(Alternatives[S, P, R], self.alternatives)._pytest_parametrize_pairs(
             test,
             n_cache=n_cache,
             double_reference=double_reference,
@@ -223,7 +222,7 @@ class _BoundAlternatives(Generic[S, P, R]):
 class _BoundImplementation(Generic[S, P, R]):
     implementation: Implementation[S, P, R]
     instance: object | None
-    owner: Type[object] | None
+    owner: type[object] | None
 
     def __call__(self, *args: object, **kwargs: object) -> R:
         implementation: Callable[..., R] = _bind_implementation(
@@ -233,7 +232,7 @@ class _BoundImplementation(Generic[S, P, R]):
 
     @property
     def alternatives(self) -> Alternatives[S, P, R]:
-        return self.implementation.alternatives
+        return cast(Alternatives[S, P, R], self.implementation.alternatives)
 
     def add(
         self,
@@ -371,8 +370,8 @@ class Alternatives(Generic[S, P, R]):
         return implementation(*args, **kwargs)
 
     def __get__(
-        self, instance: object | None, owner: Type[object] | None = None
-    ) -> object:
+        self, instance: object | None, owner: type[object] | None = None
+    ) -> Alternatives[S, P, R] | _BoundAlternatives[S, P, R]:
         if instance is None and not self._binds_on_class_access():
             return self
         return _BoundAlternatives(self, instance, owner)
@@ -442,7 +441,7 @@ class Alternatives(Generic[S, P, R]):
         *,
         only_default: bool,
         instance: object | None,
-        owner: Type[object] | None,
+        owner: type[object] | None,
     ) -> F | Callable[[F], F]:
         """Build parametrization while retaining descriptor binding context."""
         import pytest
@@ -508,7 +507,7 @@ class Alternatives(Generic[S, P, R]):
         double_reference: bool,
         only_default: bool,
         instance: object | None,
-        owner: Type[object] | None,
+        owner: type[object] | None,
     ) -> F | Callable[[F], F]:
         """Build pairwise parametrization with a callable, correctly bound reference."""
         import pytest
@@ -620,8 +619,8 @@ class Implementation(Generic[S, P, R]):
         return implementation(*args, **kwargs)
 
     def __get__(
-        self, instance: object | None, owner: Type[object] | None = None
-    ) -> object:
+        self, instance: object | None, owner: type[object] | None = None
+    ) -> Implementation[S, P, R] | _BoundImplementation[S, P, R]:
         if instance is None and not isinstance(self.implementation, classmethod):
             return self
         return _BoundImplementation(self, instance, owner)

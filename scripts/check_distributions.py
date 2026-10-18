@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 from packaging.version import Version
-
 
 SMOKE_TEST = '''
 from importlib import metadata
