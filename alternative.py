@@ -248,6 +248,9 @@ class Alternatives(Generic[S, P, R]):
             return wrapper
 
         label = _maybe_get_caller_path()
+        if isinstance(implementation, Alternatives):
+            source = cast(Alternatives[S, P, R], implementation)
+            implementation = source.reference.implementation
         if not isinstance(implementation, Implementation):
             imp = Implementation(
                 self,
