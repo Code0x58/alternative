@@ -62,6 +62,7 @@ Contents
    workflow
    pytest
    api
+   contributing
 
 Project Links
 -------------

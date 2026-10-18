@@ -1,0 +1,4 @@
+# Python 3.13 adds __replace__ to dataclasses. Remove when the stubs declare it.
+alternative.Implementation.__replace__
+alternative._BoundAlternatives.__replace__
+alternative._BoundImplementation.__replace__

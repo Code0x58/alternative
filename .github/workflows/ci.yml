@@ -6,10 +6,25 @@ on:
       - main
       - master
   pull_request:
+  workflow_call:
+    secrets:
+      CODECOV_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_LOCKED: "true"
 
 jobs:
   tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     strategy:
@@ -21,28 +36,38 @@ jobs:
           - "3.12"
           - "3.13"
           - "3.14"
+          - "3.15"
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.1"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: uv sync --dev --group=docs
 
+      - name: Verify selected Python version
+        env:
+          EXPECTED_PYTHON_VERSION: ${{ matrix.python-version }}
+        run: uv run --dev python -c 'import os, sys; actual = f"{sys.version_info.major}.{sys.version_info.minor}"; assert actual == os.environ["EXPECTED_PYTHON_VERSION"], actual'
+
       - name: Ruff format check
         run: uv run --dev ruff format --check --diff .
-        continue-on-error: true
 
       - name: Ruff lint check
         run: uv run --dev ruff check .
-        continue-on-error: true
 
       - name: Pyrefly type check
         run: uv run --dev pyrefly check .
@@ -54,7 +79,12 @@ jobs:
         run: uv run --dev mypy .
 
       - name: Stubtest runtime typing check
+        if: ${{ !contains(fromJSON('["3.13", "3.14", "3.15"]'), matrix.python-version) }}
         run: uv run --dev stubtest alternative
+
+      - name: Stubtest runtime typing check on Python 3.13 and newer
+        if: contains(fromJSON('["3.13", "3.14", "3.15"]'), matrix.python-version)
+        run: uv run --dev stubtest alternative --allowlist scripts/stubtest_dataclass_allowlist.txt
 
       - name: Run tests
         run: |
@@ -69,7 +99,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: (success() || hashFiles('coverage.xml') != '') && env.CODECOV_TOKEN != ''
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ env.CODECOV_TOKEN }}
           files: ./coverage.xml
@@ -77,9 +107,34 @@ jobs:
 
       - name: Upload test results to Codecov
         if: (success() || hashFiles('test-results.xml') != '') && env.CODECOV_TOKEN != ''
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ env.CODECOV_TOKEN }}
           files: ./test-results.xml
           report_type: test_results
           fail_ci_if_error: true
+
+  distributions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Install uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.1"
+          python-version: "3.14"
+      - name: Install locked build dependencies
+        run: uv sync --dev --group=docs
+      - name: Build distributions
+        run: uv build --no-build-isolation --python .venv/bin/python
+      - name: Check installed distributions outside the checkout
+        run: uv run --dev python scripts/check_distributions.py dist

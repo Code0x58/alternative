@@ -1,5 +1,6 @@
 import inspect
 import re
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -23,8 +24,11 @@ def test_callsite_normal(request: pytest.FixtureRequest):
     assert path is not None
     func_name = request.node.originalname
 
-    # Should start with MODULE.level1.<locals>.level2
-    prefix = f"{MODULE}.{func_name}.<locals>.level1 ({__file__}"
+    # Code objects acquired qualified names in Python 3.11.
+    caller_name = (
+        f"{func_name}.<locals>.level1" if sys.version_info >= (3, 11) else "level1"
+    )
+    prefix = f"{MODULE}.{caller_name} ({__file__}"
     assert re.fullmatch(re.escape(prefix) + r":\d+\)", path)
 
 
