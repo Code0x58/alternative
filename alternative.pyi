@@ -157,6 +157,27 @@ class _BoundAlternatives(Generic[S, P, R]):
     def reference(self) -> Implementation[S, P, R]: ...
     @property
     def callable(self) -> Callable[..., R] | _TypedDescriptor[P, R]: ...
+    @overload
+    def pytest_parametrize(self, *, only_default: bool = False) -> Callable[[F], F]: ...
+    @overload
+    def pytest_parametrize(self, test: F, *, only_default: bool = False) -> F: ...
+    @overload
+    def pytest_parametrize_pairs(
+        self,
+        *,
+        n_cache: int | None = 0,
+        double_reference: bool = False,
+        only_default: bool = False,
+    ) -> Callable[[F], F]: ...
+    @overload
+    def pytest_parametrize_pairs(
+        self,
+        test: F,
+        *,
+        n_cache: int | None = 0,
+        double_reference: bool = False,
+        only_default: bool = False,
+    ) -> F: ...
 
 class _BoundImplementation(Generic[S, P, R]):
     __match_args__: tuple[str, str, str]
