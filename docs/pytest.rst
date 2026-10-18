@@ -54,6 +54,22 @@ reference callable used in pairwise tests:
 Use ``n_cache=0`` when you do not want effective caching. Use ``None`` for an
 unbounded cache when the reference is expensive and arguments are hashable.
 
+Caching coroutine, generator, or async-generator reference functions raises
+``ValueError`` during test decoration. Keep ``n_cache=0`` for these functions so
+each call creates a fresh awaitable or iterator. Callable instances with an
+asynchronous or generator ``__call__`` follow the same rule. For synchronous
+factories, only enable caching when their results can safely be reused.
+
+Async Tests
+-----------
+
+The helpers preserve ``async def`` tests for ``pytest-asyncio`` and other async
+pytest plugins. Install ``pytest-asyncio`` separately and apply
+``@pytest.mark.asyncio`` in either order relative to either parametrization
+helper. Await the injected callables normally and leave reference caching
+disabled. Ordinary runtime calls also return awaitables for asynchronous
+implementations; the library does not run an event loop on the caller's behalf.
+
 Only the Default Implementation
 -------------------------------
 

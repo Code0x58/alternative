@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 import inspect
 import os
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from functools import WRAPPER_ASSIGNMENTS, lru_cache, wraps
 from types import FrameType
 from typing import (
@@ -174,6 +174,48 @@ def _set_wrapper_metadata(
             continue
         object.__setattr__(wrapper, name, value)
     object.__setattr__(wrapper, "__wrapped__", source)
+
+
+def _wrap_pytest_test(test: F) -> F:
+    """Copy a test while preserving coroutine identity and isolating pytest marks."""
+    if inspect.iscoroutinefunction(test):
+        async_test = cast(Callable[..., Awaitable[object]], test)
+
+        @wraps(test)
+        async def async_inner(*args: object, **kwargs: object) -> object:
+            """Await the original asynchronous test."""
+            return await async_test(*args, **kwargs)
+
+        return cast(F, async_inner)
+
+    @wraps(test)
+    def inner(*args: object, **kwargs: object) -> object:
+        """Invoke the original synchronous test."""
+        return test(*args, **kwargs)
+
+    return cast(F, inner)
+
+
+def _cached_reference(
+    implementation: Callable[..., R], n_cache: int | None
+) -> Callable[..., R]:
+    """Reject caching functions that produce single-use awaitables or iterators."""
+    if n_cache is None or n_cache > 0:
+        source = inspect.unwrap(implementation)
+        call = type(source).__call__
+        if any(
+            predicate(source) or predicate(call)
+            for predicate in (
+                inspect.iscoroutinefunction,
+                inspect.isgeneratorfunction,
+                inspect.isasyncgenfunction,
+            )
+        ):
+            raise ValueError(
+                "Reference caching is not supported for coroutine or generator "
+                "functions; use n_cache=0."
+            )
+    return cast(Callable[..., R], lru_cache(maxsize=n_cache)(implementation))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -533,12 +575,9 @@ class Alternatives(_CallableMetadata, Generic[S, P, R, Q]):
             )
         ]
 
-        @pytest.mark.parametrize("implementation", implementations)
-        @wraps(test)
-        def inner(*args: object, **kwargs: object) -> object:
-            return test(*args, **kwargs)
-
-        return cast(F, inner)
+        return pytest.mark.parametrize("implementation", implementations)(
+            _wrap_pytest_test(test)
+        )
 
     def pytest_parametrize_pairs(
         self,
@@ -597,13 +636,9 @@ class Alternatives(_CallableMetadata, Generic[S, P, R, Q]):
 
             return decorator
 
-        reference_implementation = cast(
-            Callable[..., R],
-            lru_cache(maxsize=n_cache)(
-                _bind_test_implementation(
-                    self.reference.implementation, instance, owner
-                )
-            ),
+        reference_implementation = _cached_reference(
+            _bind_test_implementation(self.reference.implementation, instance, owner),
+            n_cache,
         )
 
         implementations = [
@@ -615,13 +650,10 @@ class Alternatives(_CallableMetadata, Generic[S, P, R, Q]):
             )
         ]
 
-        @pytest.mark.parametrize("reference", [reference_implementation])
-        @pytest.mark.parametrize("implementation", implementations)
-        @wraps(test)
-        def inner(*args: object, **kwargs: object) -> object:
-            return test(*args, **kwargs)
-
-        return cast(F, inner)
+        inner = pytest.mark.parametrize("implementation", implementations)(
+            _wrap_pytest_test(test)
+        )
+        return pytest.mark.parametrize("reference", [reference_implementation])(inner)
 
     def _select_parametrize_implementations(
         self, *, only_default: bool
