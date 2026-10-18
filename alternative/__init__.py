@@ -297,6 +297,13 @@ class Alternatives(Generic[S, P, R, Q]):
         if isinstance(implementation, Alternatives):
             source = cast(Alternatives[S, P, R, Q], implementation)
             implementation = source.reference.implementation
+        if (
+            isinstance(self.reference.implementation, staticmethod)
+            and callable(implementation)
+            and not isinstance(implementation, (Implementation, staticmethod))
+        ):
+            # Imported functions retain the reference's static binding contract.
+            implementation = staticmethod(implementation)
         if not isinstance(implementation, Implementation):
             imp = Implementation(
                 self,
