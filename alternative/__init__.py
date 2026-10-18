@@ -149,14 +149,25 @@ def _bind_test_implementation(
 _WRAPPER_ATTRIBUTES = frozenset(WRAPPER_ASSIGNMENTS) - {"__annotations__"}
 
 
+class _WrappedCallable:
+    """Expose unwrap targets on instances without confusing class constructors."""
+
+    def __get__(
+        self, instance: _CallableMetadata | None, owner: type[object] | None = None
+    ) -> object:
+        if instance is None:
+            raise AttributeError("__wrapped__")
+        return instance._get_wrapped_callable()
+
+
 class _CallableMetadata:
     """Resolve annotations lazily on the original callable across Python versions."""
 
     _wrapper_metadata: dict[str, object]
+    __wrapped__ = _WrappedCallable()
 
-    @property
-    def __wrapped__(self) -> object:
-        """Expose the source callable without allowing it to replace dispatch state."""
+    def _get_wrapped_callable(self) -> object:
+        """Return the original callable for instance introspection."""
         return self._wrapper_metadata["__wrapped__"]
 
     def _get_wrapper_metadata(self) -> dict[str, object]:
@@ -195,8 +206,6 @@ def _set_wrapper_metadata(
         metadata[name] = value
     metadata["__wrapped__"] = source
     object.__setattr__(wrapper, "_wrapper_metadata", metadata)
-    attributes = cast("dict[str, object]", object.__getattribute__(wrapper, "__dict__"))
-    attributes.update(metadata)
 
 
 def _wrap_pytest_test(test: F) -> F:
@@ -254,8 +263,7 @@ class _BoundAlternatives(_CallableMetadata, Generic[S, P, R, Q]):
         """Share the registered reference metadata without copying it on lookup."""
         return self.alternatives._wrapper_metadata
 
-    @property
-    def __wrapped__(self) -> Callable[..., R]:
+    def _get_wrapped_callable(self) -> Callable[..., R]:
         """Bind the reference lazily when introspection requests it."""
         return _bind_implementation(
             self.alternatives.reference.implementation, self.instance, self.owner
@@ -362,8 +370,7 @@ class _BoundImplementation(_CallableMetadata, Generic[S, P, R, Q]):
         """Share metadata without copying it on every descriptor access."""
         return self.implementation._wrapper_metadata
 
-    @property
-    def __wrapped__(self) -> Callable[..., R]:
+    def _get_wrapped_callable(self) -> Callable[..., R]:
         """Expose the correctly bound implementation for introspection."""
         return self._bound_callable
 

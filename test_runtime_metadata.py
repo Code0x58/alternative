@@ -97,6 +97,16 @@ def test_missing_optional_metadata_remains_missing() -> None:
         _ = wrapped.__name__
 
 
+@pytest.mark.parametrize(
+    "wrapper", [alternative.Alternatives, alternative.Implementation]
+)
+def test_wrapper_classes_keep_constructor_signatures(wrapper) -> None:
+    """Instance unwrap metadata must not masquerade as a class's wrapped callable."""
+    assert "implementation" in inspect.signature(wrapper).parameters
+    with pytest.raises(AttributeError):
+        _ = wrapper.__wrapped__
+
+
 def test_metadata_does_not_copy_implementation_state() -> None:
     """Function attributes cannot overwrite a wrapper's registration helpers."""
 

@@ -109,13 +109,13 @@ class _CallableMetadata:
 
     _wrapper_metadata: dict[str, object]
 
-    @property
-    def __wrapped__(self) -> object: ...
+    __wrapped__: object
     __name__: str
     __qualname__: str
     __module__: str
     __doc__: str | None
     __annotations__: dict[str, object]
+    def _get_wrapped_callable(self) -> object: ...
     def _get_wrapper_metadata(self) -> dict[str, object]: ...
     def __getattribute__(self, name: str) -> object: ...
 
