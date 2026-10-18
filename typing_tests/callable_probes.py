@@ -2,6 +2,8 @@
 
 from collections.abc import Callable
 
+from typing_extensions import assert_type
+
 import alternative
 
 
@@ -49,3 +51,23 @@ bound_classmethod_callable: Callable[[int, str], str] = DescriptorMethods().buil
 
 staticmethod_callable: Callable[[int, str], str] = DescriptorMethods.parse
 bound_staticmethod_callable: Callable[[int, str], str] = DescriptorMethods().parse
+
+
+class ImportedStatic:
+    """Preserve static calls when registering an ordinary imported function."""
+
+    @alternative.reference
+    @staticmethod
+    def parse(value: str) -> int:
+        """Parse a decimal integer."""
+        return int(value)
+
+
+def imported_parse(value: str) -> int:
+    """Accept the same public signature without a receiver."""
+    return int(value, 10)
+
+
+ImportedStatic.parse.add(imported_parse, default=True)
+assert_type(ImportedStatic.parse("3"), int)
+assert_type(ImportedStatic().parse("3"), int)

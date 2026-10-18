@@ -158,3 +158,7 @@ also works on methods. Put ``@alternative.reference`` outside
 Calling through an instance or class binds ``self`` and ``cls`` normally. Direct
 alternative implementations also bind normally, so ``parser.parse_fast("1")``
 or ``Parser.from_text_fast("1")`` call that implementation directly.
+
+When adding an imported plain function to a static-method reference with
+``Parser.is_valid.add(candidate)``, registration preserves static binding. The
+candidate receives the same arguments through either the class or an instance.
