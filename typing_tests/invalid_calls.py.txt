@@ -26,3 +26,9 @@ function(label='x')  # error
 keywords(1)  # error
 positional(count=1)  # error
 factory('2')  # error
+function('bad', 'x')  # error
+function(1)  # error
+function(1, 'x', 'extra')  # error
+keywords()  # error
+alternative.Alternatives.__call__(function.reference, 1, 'x')  # error
+alternative.Alternatives.add(function.reference, str)  # error

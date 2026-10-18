@@ -41,9 +41,11 @@ def test_wheel_includes_stub(wheel_path: Path) -> None:
     assert "alternative/py.typed" in names
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="module", params=["callable_probes.py", "model_probes.py"])
 def installed_consumer(
-    wheel_path: Path, tmp_path_factory: pytest.TempPathFactory
+    wheel_path: Path,
+    tmp_path_factory: pytest.TempPathFactory,
+    request: pytest.FixtureRequest,
 ) -> tuple[Path, Path]:
     """Install the wheel without dependencies and copy probes outside the checkout."""
     directory = tmp_path_factory.mktemp("installed-consumer")
@@ -57,9 +59,7 @@ def installed_consumer(
         check=True,
     )
     probe = directory / "consumer.py"
-    shutil.copyfile(
-        Path(__file__).parent / "typing_tests" / "callable_probes.py", probe
-    )
+    shutil.copyfile(Path(__file__).parent / "typing_tests" / request.param, probe)
     return python, probe
 
 
