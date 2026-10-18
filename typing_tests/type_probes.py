@@ -26,6 +26,11 @@ class NormalMethods:
         """Return a labelled value repeated a requested number of times."""
         return label * count
 
+    @method.add(default=True)
+    def method_default(self, count: int, label: str) -> str:
+        """Preserve the signature through the registration decorator factory."""
+        return label * count
+
     @method.add
     def method_extra(self, count: int, label: str) -> str:
         """Return an upper-case labelled value repeated a requested number of times."""
@@ -46,6 +51,12 @@ class DescriptorMethods:
         """Return a labelled value repeated a requested number of times."""
         return label * count
 
+    @build.add(default=True)
+    @classmethod
+    def build_default(cls, count: int, label: str) -> str:
+        """Preserve the signature through the registration decorator factory."""
+        return label * count
+
     @build.add
     @classmethod
     def build_extra(cls, count: int, label: str) -> str:
@@ -56,6 +67,12 @@ class DescriptorMethods:
     @staticmethod
     def parse(count: int, label: str) -> str:
         """Return a labelled value repeated a requested number of times."""
+        return label * count
+
+    @parse.add(default=True)
+    @staticmethod
+    def parse_default(count: int, label: str) -> str:
+        """Preserve the signature through the registration decorator factory."""
         return label * count
 
     @parse.add
@@ -72,3 +89,7 @@ assert_type(DescriptorMethods.build_extra(2, "a"), str)
 assert_type(DescriptorMethods.parse(2, "a"), str)
 assert_type(DescriptorMethods().parse(2, "a"), str)
 assert_type(DescriptorMethods.parse_extra(2, "a"), str)
+
+assert_type(normal_methods.method_default(2, "a"), str)
+assert_type(DescriptorMethods.build_default(2, "a"), str)
+assert_type(DescriptorMethods.parse_default(2, "a"), str)

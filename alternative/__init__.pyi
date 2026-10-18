@@ -44,6 +44,23 @@ class _TypedDescriptor(Protocol[P, R_co]):
         self, instance: object | None, owner: type[object] | None = None, /
     ) -> Callable[P, R_co]: ...
 
+class _AddDecorator(Protocol[S, P, R]):
+    @overload
+    def __call__(
+        self: _AddDecorator[_NoReceiver, P, R],
+        implementation: Callable[P, R]
+        | Callable[Concatenate[type[_Owner], P], R]
+        | classmethod[_Owner, P, R]
+        | staticmethod[P, R],
+        /,
+    ) -> Implementation[_NoReceiver, P, R]: ...
+    @overload
+    def __call__(
+        self,
+        implementation: Callable[Concatenate[S, P], R] | Implementation[S, P, R],
+        /,
+    ) -> Implementation[S, P, R]: ...
+
 class _ReferenceDecorator(Protocol):
     @overload
     def __call__(
@@ -152,9 +169,7 @@ class _BoundAlternatives(Generic[S, P, R]):
         default: bool = False,
     ) -> Implementation[S, P, R]: ...
     @overload
-    def add(
-        self, *, default: bool = False
-    ) -> Callable[[Callable[..., R]], Implementation[S, P, R]]: ...
+    def add(self, *, default: bool = False) -> _AddDecorator[S, P, R]: ...
     @property
     def implementations(self) -> tuple[Implementation[S, P, R], ...]: ...
     @property
@@ -257,9 +272,7 @@ class _BoundImplementation(Generic[S, P, R]):
         default: bool = False,
     ) -> Implementation[S, P, R]: ...
     @overload
-    def add(
-        self, *, default: bool = False
-    ) -> Callable[[Callable[..., R]], Implementation[S, P, R]]: ...
+    def add(self, *, default: bool = False) -> _AddDecorator[S, P, R]: ...
 
 class Alternatives(Generic[S, P, R]):
     _reference: Implementation[S, P, R]
@@ -298,9 +311,7 @@ class Alternatives(Generic[S, P, R]):
         default: bool = False,
     ) -> Implementation[S, P, R]: ...
     @overload
-    def add(
-        self, *, default: bool = False
-    ) -> Callable[[Callable[..., R]], Implementation[S, P, R]]: ...
+    def add(self, *, default: bool = False) -> _AddDecorator[S, P, R]: ...
     @property
     def reference(self) -> Implementation[S, P, R]: ...
     @property
@@ -579,9 +590,7 @@ class Implementation(Generic[S, P, R]):
         default: bool = False,
     ) -> Implementation[S, P, R]: ...
     @overload
-    def add(
-        self, *, default: bool = False
-    ) -> Callable[[Callable[..., R]], Implementation[S, P, R]]: ...
+    def add(self, *, default: bool = False) -> _AddDecorator[S, P, R]: ...
 
 @overload
 def reference(
