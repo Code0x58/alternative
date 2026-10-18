@@ -158,7 +158,7 @@ class _BoundAlternatives(Generic[S, P, R]):
         return add(implementation, default=default)
 
     @property
-    def implementations(self) -> list[Implementation[S, P, R]]:
+    def implementations(self) -> tuple[Implementation[S, P, R], ...]:
         return self.alternatives.implementations
 
     @property
@@ -204,7 +204,7 @@ class Alternatives(Generic[S, P, R]):
         default: bool = False,
     ):
         imp = Implementation(self, implementation, label=_maybe_get_caller_path())
-        self.reference = imp
+        self._reference = imp
         # tracks the active implementation
         self._default: Implementation[S, P, R] | None = None
         self._debug_default: str | None = None
@@ -279,6 +279,11 @@ class Alternatives(Generic[S, P, R]):
         return imp
 
     @property
+    def reference(self) -> Implementation[S, P, R]:
+        """Return the immutable reference implementation."""
+        return self._reference
+
+    @property
     def callable(self) -> Callable[..., R] | _TypedDescriptor[P, R]:
         """Return the active implementation.
 
@@ -298,11 +303,12 @@ class Alternatives(Generic[S, P, R]):
         return callable_
 
     @property
-    def implementations(self) -> list[Implementation[S, P, R]]:
+    def implementations(self) -> tuple[Implementation[S, P, R], ...]:
+        """Return an immutable snapshot and prevent further registration."""
         if not self._implementations_used:
             self._implementations_used = True
             self._debug_implementations_used = _maybe_get_caller_path()
-        return self._implementations
+        return tuple(self._implementations)
 
     def __call__(self, *args: object, **kwargs: object) -> R:
         implementation: Callable[..., R] = _bind_implementation(
@@ -487,7 +493,7 @@ class Alternatives(Generic[S, P, R]):
         return implementations
 
 
-@dataclasses.dataclass(unsafe_hash=True)
+@dataclasses.dataclass(frozen=True)
 class Implementation(Generic[S, P, R]):
     alternatives: Alternatives[S, P, R]
     implementation: Callable[..., R] | _TypedDescriptor[P, R]
@@ -495,7 +501,7 @@ class Implementation(Generic[S, P, R]):
 
     def __post_init__(self):
         if self.label is None:
-            self.label = _maybe_get_caller_path()
+            object.__setattr__(self, "label", _maybe_get_caller_path())
 
     def __repr__(self) -> str:
         implementation_name = getattr(

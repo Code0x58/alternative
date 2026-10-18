@@ -61,6 +61,10 @@ The library intentionally freezes registration after either of these events:
 
 These rules also apply when Python runs with ``-O`` or ``PYTHONOPTIMIZE``.
 
+``.implementations`` returns a tuple, and each ``Implementation`` is immutable.
+The ``.reference`` property is read-only. Register candidates with ``.add(...)``
+before inspecting or invoking the alternatives set.
+
 This protects test runs from covering only the implementations that happened to
 be imported before collection. It also prevents runtime callers from changing
 the active implementation after part of the process has already used a previous
