@@ -74,8 +74,15 @@ and ``PYCHARM_PYTHON`` to use a different Python environment. The script copies
 the package and probes into a temporary project, configures its Python SDK, and
 requires a deliberately invalid control for every requested inspection. It leaves
 the repository and your IDE settings untouched. A clean run produces no output;
-exit status 1 reports probe diagnostics, and status 2 means inspection failed or
-was incomplete.
+exit status 1 reports unexpected diagnostics or passes, and status 2 means
+inspection failed, was incomplete, or the xfail manifest was invalid.
 
-The full signature probes currently expose PyCharm compatibility failures; see
-:doc:`api`. Do not treat passing CI checks as evidence that these IDE probes pass.
+The known gaps in :doc:`api` are strict expected failures listed in
+``typing_tests/pycharm_xfails.json``. Each entry identifies an assertion by its
+expression, links a related JetBrains issue, and lists its exact diagnostics.
+Formatting and line changes do not affect matching. A new diagnostic, including
+one on an already affected assertion, fails the check. Missing expected
+diagnostics produce ``XPASS`` failures; review and remove fixed expectations.
+Use ``scripts/pycharm-type-probes.sh --show-xfails`` to display the known cases.
+Do not add call-site type-checker suppressions or remove assertions to accommodate
+an IDE gap.

@@ -25,4 +25,4 @@ if [[ ! -x "${python}" ]]; then
   exit 2
 fi
 
-exec "${python}" "${script_dir}/pycharm_type_probes.py" "${repo_root}" "${inspect_sh}"
+exec "${python}" "${script_dir}/pycharm_type_probes.py" "${repo_root}" "${inspect_sh}" "$@"

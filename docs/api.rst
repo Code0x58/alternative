@@ -13,13 +13,33 @@ annotations, append the original signature as ``Q``. For example,
 ``Alternatives[int, [str], str, [int, str]]`` wraps a function taking an integer
 and a string. Inferred decorator types need no annotations.
 
-PyCharm 2026.2.3 still reports false diagnostics for some valid keyword,
-variadic, and descriptor calls. The headless probes record this outstanding
-compatibility issue; the three CI type checkers cover these call shapes.
-``typing_tests/pycharm_paramspec_repro.py`` contains a minimal callback-protocol
-reproduction that does not import this library. It passes the three CI checkers
-but PyCharm infers ``Any`` for the keyword call's result. Related JetBrains
-reports track `ParamSpec matching outside Callable
+PyCharm compatibility
+---------------------
+
+PyCharm 2026.2.3 has three known ParamSpec-related gaps:
+
+.. list-table:: Recognised PyCharm gaps
+   :header-rows: 1
+   :widths: 35 65
+
+   * - Call shape
+     - Incorrect IDE behaviour
+   * - Keyword calls through decorator objects
+     - Widens a concrete return type with ``Any``.
+   * - ``*args`` and ``**kwargs``
+     - Checks individual arguments against tuple or dictionary container types.
+   * - Instance and class methods
+     - Retains a bound ``self`` or ``cls`` parameter.
+
+``typing_tests/pycharm_xfails.json`` records each affected assertion and its exact
+expected diagnostics. These expected failures apply only to the headless PyCharm
+check; all assertions remain active for mypy, Pyright, and Pyrefly, and runtime
+tests execute the same call shapes. New diagnostics and unexpected passes fail
+the check so that fixed cases can be removed from the manifest.
+
+The standalone ``typing_tests/pycharm_paramspec_repro.py`` reproduces callback
+inference without importing this library. Related JetBrains reports cover
+`ParamSpec matching outside Callable
 <https://youtrack.jetbrains.com/issue/PY-77541>`_ and `decorated method binding
 <https://youtrack.jetbrains.com/issue/PY-85027>`_.
 

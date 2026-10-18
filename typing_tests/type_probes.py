@@ -1,7 +1,9 @@
 """Type-level probes for decorator transparency.
 
 This module is intentionally not a pytest test. It is exercised by the CI
-type-checking stages, which run mypy and pyrefly over the whole repository.
+type-checking stages. PyCharm-specific expected failures are recorded by
+assertion expression and exact diagnostic in pycharm_xfails.json; the assertions
+remain active for mypy, Pyright, and Pyrefly.
 """
 
 from typing_extensions import assert_type

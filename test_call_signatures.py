@@ -1,7 +1,7 @@
 """Execute typing examples with their original call signatures."""
 
-from pathlib import Path
 import runpy
+from pathlib import Path
 
 
 def test_typing_examples_execute_with_their_original_call_shapes() -> None:

@@ -1,0 +1,213 @@
+{
+  "pycharm_version": "2026.2.3",
+  "gaps": {
+    "callback-inference": {
+      "issue": "https://youtrack.jetbrains.com/issue/PY-77541",
+      "reason": "ParamSpec callback inference widens the declared result with Any."
+    },
+    "variadic-arguments": {
+      "issue": "https://youtrack.jetbrains.com/issue/PY-77541",
+      "reason": "ParamSpec substitution treats variadic elements as tuple or dict containers."
+    },
+    "receiver-binding": {
+      "issue": "https://youtrack.jetbrains.com/issue/PY-85027",
+      "reason": "Descriptor and ParamSpec inference retains a bound self or cls parameter."
+    }
+  },
+  "cases": [
+    {
+      "expression": "assert_type(normal_function(count=2, label='a'), str)",
+      "gap": "callback-inference",
+      "diagnostics": [
+        [
+          "PyAssertTypeInspection",
+          "Expected type 'str', got 'Any | str' instead"
+        ]
+      ]
+    },
+    {
+      "expression": "assert_type(normal_function(2, label='a'), str)",
+      "gap": "callback-inference",
+      "diagnostics": [
+        [
+          "PyAssertTypeInspection",
+          "Expected type 'str', got 'Any | str' instead"
+        ]
+      ]
+    },
+    {
+      "expression": "assert_type(make_number(kind=int, value='3'), int)",
+      "gap": "callback-inference",
+      "diagnostics": [
+        [
+          "PyAssertTypeInspection",
+          "Expected type 'int', got 'Any | int' instead"
+        ]
+      ]
+    },
+    {
+      "expression": "assert_type(collect_values(1, 2, self=3), int)",
+      "gap": "variadic-arguments",
+      "diagnostics": [
+        [
+          "PyAssertTypeInspection",
+          "Expected type 'int', got 'int | Any' instead"
+        ],
+        [
+          "PyTypeCheckerInspection",
+          "Expected type 'tuple[int, ...]', got 'Literal[1]' instead"
+        ],
+        [
+          "PyTypeCheckerInspection",
+          "Expected type 'tuple[int, ...]', got 'Literal[2]' instead"
+        ],
+        [
+          "PyTypeCheckerInspection",
+          "Expected type 'dict[str, int]', got 'Literal[3]' instead"
+        ]
+      ]
+    },
+    {
+      "expression": "assert_type(normal_methods.method(2, 'a'), str)",
+      "gap": "receiver-binding",
+      "diagnostics": [
+        [
+          "PyAssertTypeInspection",
+          "Expected type 'str', got 'Any | str' instead"
+        ],
+        [
+          "PyTypeCheckerInspection",
+          "No overload of '__call__' matches the arguments. Argument types: (_BoundAlternatives[_NoReceiver, [self: NormalMethods, count: int, label: str], str, [self: NormalMethods, count: int, label: str]], Literal[2], Literal[\"a\"]). Expected one of: (self: _BoundAlternatives[_NoReceiver, [_A1, _A2], str, [self: NormalMethods, count: int, label: str]], arg1: int, arg2: str), (self: NormalMethods, count: int)"
+        ]
+      ]
+    },
+    {
+      "expression": "assert_type(normal_methods.method(count=2, label='a'), str)",
+      "gap": "receiver-binding",
+      "diagnostics": [
+        [
+          "PyAssertTypeInspection",
+          "Expected type 'str', got 'Any | str' instead"
+        ],
+        [
+          "PyTypeCheckerInspection",
+          "Parameter 'self' unfilled (from ParamSpec '_P')"
+        ]
+      ]
+    },
+    {
+      "expression": "assert_type(NormalMethods.method(self=normal_methods, count=2, label='a'), str)",
+      "gap": "callback-inference",
+      "diagnostics": [
+        [
+          "PyAssertTypeInspection",
+          "Expected type 'str', got 'Any | str' instead"
+        ]
+      ]
+    },
+    {
+      "expression": "assert_type(DescriptorMethods.build(2, 'a'), str)",
+      "gap": "receiver-binding",
+      "diagnostics": [
+        [
+          "PyAssertTypeInspection",
+          "Expected type 'str', got 'Any | str' instead"
+        ],
+        [
+          "PyTypeCheckerInspection",
+          "No overload of '__call__' matches the arguments. Argument types: (Alternatives[_NoReceiver, [cls: type[DescriptorMethods], count: int, label: str], str, [cls: type[DescriptorMethods], count: int, label: str]], Literal[2], Literal[\"a\"]). Expected one of: (self: Alternatives[_NoReceiver, [cls: type[DescriptorMethods], count: int, label: str], str, [_A1, _A2]], arg1: int, arg2: str), (cls: type[DescriptorMethods], count: int)"
+        ]
+      ]
+    },
+    {
+      "expression": "assert_type(DescriptorMethods().build(2, 'a'), str)",
+      "gap": "receiver-binding",
+      "diagnostics": [
+        [
+          "PyAssertTypeInspection",
+          "Expected type 'str', got 'Any | str' instead"
+        ],
+        [
+          "PyTypeCheckerInspection",
+          "No overload of '__call__' matches the arguments. Argument types: (_BoundAlternatives[_NoReceiver, [cls: type[DescriptorMethods], count: int, label: str], str, [cls: type[DescriptorMethods], count: int, label: str]], Literal[2], Literal[\"a\"]). Expected one of: (self: _BoundAlternatives[_NoReceiver, [_A1, _A2], str, [cls: type[DescriptorMethods], count: int, label: str]], arg1: int, arg2: str), (cls: type[DescriptorMethods], count: int)"
+        ]
+      ]
+    },
+    {
+      "expression": "assert_type(DescriptorMethods.build(count=2, label='a'), str)",
+      "gap": "receiver-binding",
+      "diagnostics": [
+        [
+          "PyAssertTypeInspection",
+          "Expected type 'str', got 'Any | str' instead"
+        ],
+        [
+          "PyTypeCheckerInspection",
+          "Parameter 'cls' unfilled (from ParamSpec '_Q')"
+        ]
+      ]
+    },
+    {
+      "expression": "assert_type(DescriptorMethods().build(count=2, label='a'), str)",
+      "gap": "receiver-binding",
+      "diagnostics": [
+        [
+          "PyAssertTypeInspection",
+          "Expected type 'str', got 'Any | str' instead"
+        ],
+        [
+          "PyTypeCheckerInspection",
+          "Parameter 'cls' unfilled (from ParamSpec '_P')"
+        ]
+      ]
+    },
+    {
+      "expression": "assert_type(DescriptorMethods.parse(count=2, label='a'), str)",
+      "gap": "callback-inference",
+      "diagnostics": [
+        [
+          "PyAssertTypeInspection",
+          "Expected type 'str', got 'Any | str' instead"
+        ]
+      ]
+    },
+    {
+      "expression": "assert_type(DescriptorMethods().parse(count=2, label='a'), str)",
+      "gap": "callback-inference",
+      "diagnostics": [
+        [
+          "PyAssertTypeInspection",
+          "Expected type 'str', got 'Any | str' instead"
+        ]
+      ]
+    },
+    {
+      "expression": "assert_type(DescriptorMethods.self_keyword(self=1), int)",
+      "gap": "variadic-arguments",
+      "diagnostics": [
+        [
+          "PyAssertTypeInspection",
+          "Expected type 'int', got 'int | Any' instead"
+        ],
+        [
+          "PyTypeCheckerInspection",
+          "Expected type 'dict[str, int]', got 'Literal[1]' instead"
+        ]
+      ]
+    },
+    {
+      "expression": "assert_type(DescriptorMethods().self_keyword(self=1), int)",
+      "gap": "variadic-arguments",
+      "diagnostics": [
+        [
+          "PyAssertTypeInspection",
+          "Expected type 'int', got 'int | Any' instead"
+        ],
+        [
+          "PyTypeCheckerInspection",
+          "Expected type 'dict[str, int]', got 'Literal[1]' instead"
+        ]
+      ]
+    }
+  ]
+}
