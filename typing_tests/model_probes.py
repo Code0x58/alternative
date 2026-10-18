@@ -67,6 +67,8 @@ class Methods:
 
 
 bound = Methods().repeat
+assert_type(next(iter(bound.measure(len, count=2, label="a").values())), int)
+assert_type(next(iter(Methods.repeat.measure(len, Methods(), 2, "a").values())), int)
 
 
 @bound.pytest_parametrize
