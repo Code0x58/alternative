@@ -1,6 +1,7 @@
 import re
+from collections.abc import Callable
 from inspect import signature
-from typing import Callable, cast
+from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
