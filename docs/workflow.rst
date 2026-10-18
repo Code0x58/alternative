@@ -59,6 +59,8 @@ The library intentionally freezes registration after either of these events:
 * the alternatives object is called;
 * the implementations list is inspected.
 
+These rules also apply when Python runs with ``-O`` or ``PYTHONOPTIMIZE``.
+
 This protects test runs from covering only the implementations that happened to
 be imported before collection. It also prevents runtime callers from changing
 the active implementation after part of the process has already used a previous

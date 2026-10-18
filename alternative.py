@@ -293,7 +293,8 @@ class Alternatives(Generic[S, P, R]):
             self._callable = callable_
             self._debug_callable_used = _maybe_get_caller_path()
             # access the list of implementations to freeze them
-            assert self.implementations
+            implementations = self.implementations
+            assert implementations
         return callable_
 
     @property
