@@ -75,8 +75,7 @@ source = "vcs"
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "/alternative.py",
-    "/alternative.pyi",
+    "/alternative",
     "/conftest.py",
     "/docs",
     "/LICENSE",
@@ -90,8 +89,7 @@ include = [
 
 [tool.hatch.build.targets.wheel]
 only-include = [
-    "alternative.py",
-    "alternative.pyi",
+    "alternative",
 ]
 
 [tool.pytest.ini_options]

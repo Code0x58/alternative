@@ -79,12 +79,7 @@ jobs:
         run: uv run --dev mypy .
 
       - name: Stubtest runtime typing check
-        if: ${{ !contains(fromJSON('["3.13", "3.14", "3.15"]'), matrix.python-version) }}
         run: uv run --dev stubtest alternative
-
-      - name: Stubtest runtime typing check on Python 3.13 and newer
-        if: contains(fromJSON('["3.13", "3.14", "3.15"]'), matrix.python-version)
-        run: uv run --dev stubtest alternative --allowlist scripts/stubtest_dataclass_allowlist.txt
 
       - name: Run tests
         run: |

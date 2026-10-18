@@ -17,7 +17,7 @@ When optimizing a hot path, it’s common to accumulate:
 
 `alternative` keeps that workflow tidy by making implementation registration and selection first-class.
 
-The same model works for module functions, instance methods, class methods, and static methods. Public typing is shipped in [`alternative.pyi`](alternative.pyi), so type checkers and IDEs can see the original call signatures instead of losing them behind the decorator objects.
+The same model works for module functions, instance methods, class methods, and static methods. Public typing is shipped in [`alternative/__init__.pyi`](alternative/__init__.pyi), so type checkers and IDEs can see the original call signatures instead of losing them behind the decorator objects.
 
 ## Quick example
 
@@ -129,7 +129,7 @@ When debug mode is enabled, each `Implementation` also captures a label with its
 
 ## Typing and IDEs
 
-`alternative` ships a top-level stub file, [`alternative.pyi`](alternative.pyi), for the public typing surface. It includes overloads for descriptor binding, transparent method/classmethod/staticmethod decoration, and the pytest helpers, while [`alternative.py`](alternative.py) stays focused on runtime behavior.
+`alternative` ships its stub file and `py.typed` marker in the installed package. The public typing surface lives in [`alternative/__init__.pyi`](alternative/__init__.pyi); runtime behavior lives in [`alternative/__init__.py`](alternative/__init__.py).
 
 The typing probes are checked with mypy, pyright, pyrefly, and a headless PyCharm inspection script: [`scripts/pycharm-type-probes.sh`](scripts/pycharm-type-probes.sh). The PyCharm probe covers type assertions, unresolved references, and type checker warnings in [`typing_tests/type_probes.py`](typing_tests/type_probes.py).
 

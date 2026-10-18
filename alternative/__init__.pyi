@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from typing import (
     Callable,
     Concatenate,
@@ -86,6 +87,9 @@ class _BoundAlternatives(Generic[S, P, R]):
     alternatives: Alternatives[S, P, R]
     instance: object | None
     owner: type[object] | None
+
+    if sys.version_info >= (3, 13):
+        def __replace__(self, /, **changes: object) -> _BoundAlternatives[S, P, R]: ...
 
     def __init__(
         self,
@@ -184,6 +188,11 @@ class _BoundImplementation(Generic[S, P, R]):
     implementation: Implementation[S, P, R]
     instance: object | None
     owner: type[object] | None
+
+    if sys.version_info >= (3, 13):
+        def __replace__(
+            self, /, **changes: object
+        ) -> _BoundImplementation[S, P, R]: ...
 
     def __init__(
         self,
@@ -441,6 +450,9 @@ class Implementation(Generic[S, P, R]):
     alternatives: Alternatives[S, P, R]
     implementation: Callable[..., R] | _TypedDescriptor[P, R]
     label: str | None
+
+    if sys.version_info >= (3, 13):
+        def __replace__(self, /, **changes: object) -> Implementation[S, P, R]: ...
     def __init__(
         self,
         alternatives: Alternatives[S, P, R],
