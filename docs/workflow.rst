@@ -104,7 +104,7 @@ Copying Implementations
    def source_alternatives() -> int:
        return 1
 
-   @source_alternatives.add
+   @source_alternatives.add(default=True)
    def source_candidate() -> int:
        return 2
 
@@ -119,7 +119,12 @@ set, which copies its underlying reference implementation:
 
 .. code-block:: python
 
-   target.add(source_alternatives)
+   copied = target.add(source_alternatives)
+   assert copied() == 1
+   assert source_alternatives() == 2
+
+The copy is independent of the source set's selected default. Calling it does
+not freeze registration in the source set.
 
 An :class:`alternative.Implementation` from a different alternatives set cannot
 be added directly. Pass ``implementation.implementation`` if you deliberately
