@@ -1,16 +1,26 @@
 An Optimization Workflow
-==========================
+========================
 
 This complete example keeps a reference, candidates, startup imports, correctness
 tests, and benchmarks in separate files. Its contract is to sum an iterable of
 integers, including empty inputs and large integers, without changing its items.
 
-Copy ``docs/examples/optimise_totals/`` from the checkout into your project.
-The example is included in source distributions, and its tests run in the
-project's normal pytest suite.
+After :doc:`quickstart`, use this layout when implementations and tests need
+separate modules. Create an ``optimise_totals/`` directory containing the four
+files below. You can also copy the `example directory from the source repository
+<https://github.com/Code0x58/alternative/tree/master/docs/examples/optimise_totals>`_.
+The example is included in source distributions and tested in this repository.
+
+.. code-block:: text
+
+   optimise_totals/
+       __init__.py
+       reference.py
+       candidates.py
+       test_totals.py
 
 Reference and Candidate
--------------------------
+-----------------------
 
 ``reference.py`` contains the implementation that remains the correctness oracle:
 
@@ -27,20 +37,22 @@ benchmark results for your environment. It is shown here to demonstrate the fina
 configuration, rather than assert a universal speed advantage for every input.
 
 Startup Imports
------------------
+---------------
 
 The package's ``__init__.py`` imports candidates before exposing the entry point:
 
 .. literalinclude:: examples/optimise_totals/__init__.py
    :language: python
 
-Application code can now use ``from optimise_totals import total``. Import the
-package before test collection or application startup invokes ``total``. An
-implementation imported after that point raises ``AddTooLateError`` instead of
-silently escaping the already collected tests.
+Application code can now use ``from optimise_totals import total``. Importing
+the package registers the candidates; import alone does not freeze registration.
+Applying a pytest helper or calling ``total`` freezes the set, so all candidate
+imports must happen first. Adding an implementation after either operation
+raises :class:`alternative.AddTooLateError`. Reading ``.callable`` or
+``.implementations`` and calling ``.measure()`` also freeze registration.
 
 Test the Contract and Measure the Result
-------------------------------------------
+----------------------------------------
 
 ``test_totals.py`` checks independent expected results as well as equivalence.
 Separate benchmark tests measure algorithms and the production entry point:
