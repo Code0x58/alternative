@@ -4,8 +4,10 @@ from typing import (
     Generic,
     ParamSpec,
     Protocol,
+    TypeAlias,
     TypeVar,
     overload,
+    type_check_only,
 )
 
 DEBUG: bool
@@ -36,6 +38,7 @@ _A3 = TypeVar("_A3")
 _A4 = TypeVar("_A4")
 _A5 = TypeVar("_A5")
 
+@type_check_only
 class _NoReceiver:
     """Marker type for descriptors that bind themselves before user calls."""
 
@@ -43,6 +46,11 @@ class _TypedDescriptor(Protocol[_P, _R_co]):
     def __get__(
         self, instance: object | None, owner: type[object] | None = None, /
     ) -> Callable[_P, _R_co]: ...
+
+_ImplementationSource: TypeAlias = _TypedDescriptor[_P, _R] | Callable[..., _R]
+_RegistrationInput: TypeAlias = (
+    Implementation[_S, _P, _R, _Q] | Alternatives[_S, _P, _R, _Q] | Callable[_Q, _R]
+)
 
 class _FunctionLike(Protocol[_S_contra, _P, _Q, _R_co]):
     @overload
@@ -62,9 +70,7 @@ class _AddDecorator(Protocol[_S, _P, _R, _Q]):
     @overload
     def __call__(
         self,
-        implementation: Callable[_Q, _R]
-        | Implementation[_S, _P, _R, _Q]
-        | Alternatives[_S, _P, _R, _Q],
+        implementation: _RegistrationInput[_S, _P, _R, _Q],
         /,
     ) -> Implementation[_S, _P, _R, _Q]: ...
 
@@ -98,7 +104,34 @@ class MultipleDefaultsError(AlternativeError):
 class CrossAlternativesImplementationError(AlternativeError):
     """Cannot add an Implementation object that belongs to a different Alternatives set."""
 
-class _BoundAlternatives(Generic[_S, _P, _R, _Q]):
+@type_check_only
+class _PytestDecorators:
+    """Preserve test function types for both parametrization APIs."""
+    @overload
+    def pytest_parametrize(
+        self, *, only_default: bool = False
+    ) -> Callable[[_F], _F]: ...
+    @overload
+    def pytest_parametrize(self, test: _F, *, only_default: bool = False) -> _F: ...
+    @overload
+    def pytest_parametrize_pairs(
+        self,
+        *,
+        n_cache: int | None = 0,
+        double_reference: bool = False,
+        only_default: bool = False,
+    ) -> Callable[[_F], _F]: ...
+    @overload
+    def pytest_parametrize_pairs(
+        self,
+        test: _F,
+        *,
+        n_cache: int | None = 0,
+        double_reference: bool = False,
+        only_default: bool = False,
+    ) -> _F: ...
+
+class _BoundAlternatives(_PytestDecorators, Generic[_S, _P, _R, _Q]):
     __match_args__ = ("alternatives", "instance", "owner")
     alternatives: Alternatives[_S, _P, _R, _Q]
     instance: object | None
@@ -114,7 +147,7 @@ class _BoundAlternatives(Generic[_S, _P, _R, _Q]):
         owner: type[object] | None,
     ) -> None: ...
     @overload
-    def __call__(self: _BoundAlternatives[_S, [], _R, _Q]) -> _R: ...
+    def __call__(self: _BoundAlternatives[_S, [], _R, _Q], /) -> _R: ...
     @overload
     def __call__(self: _BoundAlternatives[_S, [_A1], _R, _Q], arg1: _A1, /) -> _R: ...
     @overload
@@ -162,9 +195,7 @@ class _BoundAlternatives(Generic[_S, _P, _R, _Q]):
     @overload
     def add(
         self,
-        implementation: Callable[_Q, _R]
-        | Implementation[_S, _P, _R, _Q]
-        | Alternatives[_S, _P, _R, _Q],
+        implementation: _RegistrationInput[_S, _P, _R, _Q],
         *,
         default: bool = False,
     ) -> Implementation[_S, _P, _R, _Q]: ...
@@ -176,29 +207,6 @@ class _BoundAlternatives(Generic[_S, _P, _R, _Q]):
     def reference(self) -> Implementation[_S, _P, _R, _Q]: ...
     @property
     def callable(self) -> Callable[_Q, _R] | _TypedDescriptor[_P, _R]: ...
-    @overload
-    def pytest_parametrize(
-        self, *, only_default: bool = False
-    ) -> Callable[[_F], _F]: ...
-    @overload
-    def pytest_parametrize(self, test: _F, *, only_default: bool = False) -> _F: ...
-    @overload
-    def pytest_parametrize_pairs(
-        self,
-        *,
-        n_cache: int | None = 0,
-        double_reference: bool = False,
-        only_default: bool = False,
-    ) -> Callable[[_F], _F]: ...
-    @overload
-    def pytest_parametrize_pairs(
-        self,
-        test: _F,
-        *,
-        n_cache: int | None = 0,
-        double_reference: bool = False,
-        only_default: bool = False,
-    ) -> _F: ...
 
 class _BoundImplementation(Generic[_S, _P, _R, _Q]):
     __match_args__ = ("implementation", "instance", "owner")
@@ -215,42 +223,6 @@ class _BoundImplementation(Generic[_S, _P, _R, _Q]):
         instance: object | None,
         owner: type[object] | None,
     ) -> None: ...
-    @overload
-    def __call__(self: _BoundImplementation[_S, [], _R, _Q]) -> _R: ...
-    @overload
-    def __call__(self: _BoundImplementation[_S, [_A1], _R, _Q], arg1: _A1, /) -> _R: ...
-    @overload
-    def __call__(
-        self: _BoundImplementation[_S, [_A1, _A2], _R, _Q], arg1: _A1, arg2: _A2, /
-    ) -> _R: ...
-    @overload
-    def __call__(
-        self: _BoundImplementation[_S, [_A1, _A2, _A3], _R, _Q],
-        arg1: _A1,
-        arg2: _A2,
-        arg3: _A3,
-        /,
-    ) -> _R: ...
-    @overload
-    def __call__(
-        self: _BoundImplementation[_S, [_A1, _A2, _A3, _A4], _R, _Q],
-        arg1: _A1,
-        arg2: _A2,
-        arg3: _A3,
-        arg4: _A4,
-        /,
-    ) -> _R: ...
-    @overload
-    def __call__(
-        self: _BoundImplementation[_S, [_A1, _A2, _A3, _A4, _A5], _R, _Q],
-        arg1: _A1,
-        arg2: _A2,
-        arg3: _A3,
-        arg4: _A4,
-        arg5: _A5,
-        /,
-    ) -> _R: ...
-    @overload
     def __call__(self, /, *args: _P.args, **kwargs: _P.kwargs) -> _R: ...
     @overload
     def add(
@@ -264,9 +236,7 @@ class _BoundImplementation(Generic[_S, _P, _R, _Q]):
     @overload
     def add(
         self,
-        implementation: Callable[_Q, _R]
-        | Implementation[_S, _P, _R, _Q]
-        | Alternatives[_S, _P, _R, _Q],
+        implementation: _RegistrationInput[_S, _P, _R, _Q],
         *,
         default: bool = False,
     ) -> Implementation[_S, _P, _R, _Q]: ...
@@ -275,22 +245,18 @@ class _BoundImplementation(Generic[_S, _P, _R, _Q]):
     @property
     def alternatives(self) -> Alternatives[_S, _P, _R, _Q]: ...
 
-class Alternatives(Generic[_S, _P, _R, _Q]):
+class Alternatives(_PytestDecorators, Generic[_S, _P, _R, _Q]):
     _reference: Implementation[_S, _P, _R, _Q]
     _default: Implementation[_S, _P, _R, _Q] | None
     _debug_default: str | None
-    _invoked: bool
-    _debug_invoked_site: str | None
-    _enumerated: bool
-    _callable: Callable[..., _R] | _TypedDescriptor[_P, _R] | None
-    _debug_callable_used: str | None
+    _callable: _ImplementationSource[_P, _R] | None
     _implementations: list[Implementation[_S, _P, _R, _Q]]
     _implementations_used: bool
     _debug_implementations_used: str | None
 
     def __init__(
         self,
-        implementation: Callable[..., _R] | _TypedDescriptor[_P, _R],
+        implementation: _ImplementationSource[_P, _R],
         *,
         default: bool = False,
     ) -> None: ...
@@ -306,9 +272,7 @@ class Alternatives(Generic[_S, _P, _R, _Q]):
     @overload
     def add(
         self,
-        implementation: Callable[_Q, _R]
-        | Implementation[_S, _P, _R, _Q]
-        | Alternatives[_S, _P, _R, _Q],
+        implementation: _RegistrationInput[_S, _P, _R, _Q],
         *,
         default: bool = False,
     ) -> Implementation[_S, _P, _R, _Q]: ...
@@ -321,7 +285,7 @@ class Alternatives(Generic[_S, _P, _R, _Q]):
     @property
     def implementations(self) -> tuple[Implementation[_S, _P, _R, _Q], ...]: ...
     @overload
-    def __call__(self: Alternatives[_S, _P, _R, []]) -> _R: ...
+    def __call__(self: Alternatives[_S, _P, _R, []], /) -> _R: ...
     @overload
     def __call__(self: Alternatives[_S, _P, _R, [_A1]], arg1: _A1, /) -> _R: ...
     @overload
@@ -387,40 +351,17 @@ class Alternatives(Generic[_S, _P, _R, _Q]):
     ) -> Alternatives[_S, _P, _R, _Q]: ...
     def _binds_on_class_access(self) -> bool: ...
     def measure(
-        self: Alternatives[_S, _P, _R, _Q],
+        self,
         /,
         operator: Callable[[_R], _M],
         *args: _Q.args,
         **kwargs: _Q.kwargs,
     ) -> dict[Implementation[_S, _P, _R, _Q], _M]: ...
-    @overload
-    def pytest_parametrize(
-        self, *, only_default: bool = False
-    ) -> Callable[[_F], _F]: ...
-    @overload
-    def pytest_parametrize(self, test: _F, *, only_default: bool = False) -> _F: ...
-    @overload
-    def pytest_parametrize_pairs(
-        self,
-        *,
-        n_cache: int | None = 0,
-        double_reference: bool = False,
-        only_default: bool = False,
-    ) -> Callable[[_F], _F]: ...
-    @overload
-    def pytest_parametrize_pairs(
-        self,
-        test: _F,
-        *,
-        n_cache: int | None = 0,
-        double_reference: bool = False,
-        only_default: bool = False,
-    ) -> _F: ...
 
 class Implementation(Generic[_S, _P, _R, _Q]):
     __match_args__ = ("alternatives", "implementation", "label")
     alternatives: Alternatives[_S, _P, _R, _Q]
-    implementation: Callable[..., _R] | _TypedDescriptor[_P, _R]
+    implementation: _ImplementationSource[_P, _R]
     label: str | None
 
     if sys.version_info >= (3, 13):
@@ -430,47 +371,11 @@ class Implementation(Generic[_S, _P, _R, _Q]):
     def __init__(
         self,
         alternatives: Alternatives[_S, _P, _R, _Q],
-        implementation: Callable[..., _R] | _TypedDescriptor[_P, _R],
+        implementation: _ImplementationSource[_P, _R],
         label: str | None = None,
     ) -> None: ...
     def __post_init__(self) -> None: ...
     def __hash__(self) -> int: ...
-    @overload
-    def __call__(self: Implementation[_S, _P, _R, []]) -> _R: ...
-    @overload
-    def __call__(self: Implementation[_S, _P, _R, [_A1]], arg1: _A1, /) -> _R: ...
-    @overload
-    def __call__(
-        self: Implementation[_S, _P, _R, [_A1, _A2]], arg1: _A1, arg2: _A2, /
-    ) -> _R: ...
-    @overload
-    def __call__(
-        self: Implementation[_S, _P, _R, [_A1, _A2, _A3]],
-        arg1: _A1,
-        arg2: _A2,
-        arg3: _A3,
-        /,
-    ) -> _R: ...
-    @overload
-    def __call__(
-        self: Implementation[_S, _P, _R, [_A1, _A2, _A3, _A4]],
-        arg1: _A1,
-        arg2: _A2,
-        arg3: _A3,
-        arg4: _A4,
-        /,
-    ) -> _R: ...
-    @overload
-    def __call__(
-        self: Implementation[_S, _P, _R, [_A1, _A2, _A3, _A4, _A5]],
-        arg1: _A1,
-        arg2: _A2,
-        arg3: _A3,
-        arg4: _A4,
-        arg5: _A5,
-        /,
-    ) -> _R: ...
-    @overload
     def __call__(self, /, *args: _Q.args, **kwargs: _Q.kwargs) -> _R: ...
     @overload
     def __get__(
@@ -514,9 +419,7 @@ class Implementation(Generic[_S, _P, _R, _Q]):
     @overload
     def add(
         self,
-        implementation: Callable[_Q, _R]
-        | Implementation[_S, _P, _R, _Q]
-        | Alternatives[_S, _P, _R, _Q],
+        implementation: _RegistrationInput[_S, _P, _R, _Q],
         *,
         default: bool = False,
     ) -> Implementation[_S, _P, _R, _Q]: ...

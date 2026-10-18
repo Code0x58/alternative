@@ -65,6 +65,19 @@ publishing job. Only that job receives ``id-token: write`` and access to the
 rules in GitHub if releases require manual review. Active runs for the same
 release tag are allowed to finish.
 
+Typing model
+------------
+
+Name shared implementation and registration unions once. The stub's private
+``@type_check_only`` base shares pytest decorator signatures without changing
+runtime inheritance. Keep receiver-sensitive registration and descriptor types
+on their owning classes; ``typing_tests/model_probes.py`` checks the public
+``S, P, R, Q`` parameter order and both bound and unbound decorator APIs.
+
+Alternatives retain positional overloads needed by PyCharm. Implementation
+objects use their ParamSpec directly. The ParamSpec signatures preserve names,
+defaults, keyword-only parameters, and arbitrary argument counts.
+
 PyCharm typing checks
 ---------------------
 

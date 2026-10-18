@@ -11,6 +11,7 @@ from typing import (
     Generic,
     ParamSpec,
     Protocol,
+    TypeAlias,
     TypeVar,
     cast,
 )
@@ -54,14 +55,13 @@ S = TypeVar("S")
 F = TypeVar("F", bound=Callable[..., object])
 
 
-class _NoReceiver:
-    """Marker type for descriptors that bind themselves before user calls."""
-
-
 class _TypedDescriptor(Protocol[P, R_co]):
     def __get__(
         self, instance: object | None, owner: type[object] | None = None, /
     ) -> Callable[P, R_co]: ...
+
+
+_ImplementationSource: TypeAlias = _TypedDescriptor[P, R] | Callable[..., R]
 
 
 class AlternativeError(Exception):
@@ -122,7 +122,7 @@ def _maybe_get_caller_path() -> str | None:
 
 
 def _bind_implementation(
-    implementation: Callable[..., R] | _TypedDescriptor[P, R],
+    implementation: _ImplementationSource[P, R],
     instance: object | None,
     owner: type[object] | None,
 ) -> Callable[..., R]:
@@ -136,7 +136,7 @@ def _bind_implementation(
 
 
 def _bind_test_implementation(
-    implementation: Callable[..., R] | _TypedDescriptor[P, R],
+    implementation: _ImplementationSource[P, R],
     instance: object | None,
     owner: type[object] | None,
 ) -> Callable[..., R]:
@@ -182,7 +182,7 @@ class _BoundAlternatives(Generic[S, P, R, Q]):
         return self.alternatives.reference
 
     @property
-    def callable(self) -> Callable[..., R] | _TypedDescriptor[P, R]:
+    def callable(self) -> _ImplementationSource[P, R]:
         return self.alternatives.callable
 
     def pytest_parametrize(
@@ -250,7 +250,7 @@ class _BoundImplementation(Generic[S, P, R, Q]):
 class Alternatives(Generic[S, P, R, Q]):
     def __init__(
         self,
-        implementation: Callable[..., R] | _TypedDescriptor[P, R],
+        implementation: _ImplementationSource[P, R],
         *,
         default: bool = False,
     ):
@@ -259,13 +259,8 @@ class Alternatives(Generic[S, P, R, Q]):
         # tracks the active implementation
         self._default: Implementation[S, P, R, Q] | None = None
         self._debug_default: str | None = None
-        self._invoked = False
-        self._debug_invoked_site: str | None = None
-        # tracks the use of the set should be
-        self._enumerated = False
 
-        self._callable: Callable[..., R] | _TypedDescriptor[P, R] | None = None
-        self._debug_callable_used: str | None = None
+        self._callable: _ImplementationSource[P, R] | None = None
 
         # beware the order of this depends on the sequence of imports, so may vary between entrypoints
         self._implementations: list[Implementation[S, P, R, Q]] = []
@@ -291,7 +286,7 @@ class Alternatives(Generic[S, P, R, Q]):
         if isinstance(implementation, _Undefined):
 
             def wrapper(
-                implementation: Callable[..., R] | _TypedDescriptor[P, R],
+                implementation: _ImplementationSource[P, R],
             ) -> Implementation[S, P, R, Q]:
                 add = cast(Callable[..., Implementation[S, P, R, Q]], self.add)
                 return add(implementation, default=default)
@@ -305,7 +300,7 @@ class Alternatives(Generic[S, P, R, Q]):
         if not isinstance(implementation, Implementation):
             imp = Implementation(
                 self,
-                cast(Callable[..., R] | _TypedDescriptor[P, R], implementation),
+                cast(_ImplementationSource[P, R], implementation),
                 label=label,
             )
         elif implementation.alternatives is not self:
@@ -338,7 +333,7 @@ class Alternatives(Generic[S, P, R, Q]):
         return self._reference
 
     @property
-    def callable(self) -> Callable[..., R] | _TypedDescriptor[P, R]:
+    def callable(self) -> _ImplementationSource[P, R]:
         """Return the active implementation.
 
         Setting the default implementation is disabled after this is accessed."""
@@ -350,7 +345,6 @@ class Alternatives(Generic[S, P, R, Q]):
             else:
                 callable_ = self.reference
             self._callable = callable_
-            self._debug_callable_used = _maybe_get_caller_path()
             # access the list of implementations to freeze them
             implementations = self.implementations
             assert implementations
@@ -368,8 +362,6 @@ class Alternatives(Generic[S, P, R, Q]):
         implementation: Callable[..., R] = _bind_implementation(
             self.callable, None, None
         )
-        if not args:
-            return implementation(**kwargs)
         return implementation(*args, **kwargs)
 
     def __get__(
@@ -412,12 +404,7 @@ class Alternatives(Generic[S, P, R, Q]):
             return dict(
                 sorted(
                     result.items(),
-                    key=cast(
-                        Callable[
-                            [tuple[Implementation[S, P, R, Q], M]], _SupportsLessThan
-                        ],
-                        lambda x: cast(_SupportsLessThan, x[1]),
-                    ),
+                    key=lambda item: cast(_SupportsLessThan, item[1]),
                 )
             )
         except TypeError:
@@ -560,12 +547,12 @@ class Alternatives(Generic[S, P, R, Q]):
 
     def _select_parametrize_implementations(
         self, *, only_default: bool
-    ) -> list[Callable[..., R] | _TypedDescriptor[P, R]]:
+    ) -> list[_ImplementationSource[P, R]]:
         """Return implementation callables used for ``pytest_parametrize``."""
         if only_default:
             reference_implementation = self.reference.implementation
             default_implementation = self.callable
-            implementations: list[Callable[..., R] | _TypedDescriptor[P, R]] = [
+            implementations: list[_ImplementationSource[P, R]] = [
                 reference_implementation
             ]
             if default_implementation is not reference_implementation:
@@ -579,10 +566,10 @@ class Alternatives(Generic[S, P, R, Q]):
         reference_implementation: Callable[..., R],
         only_default: bool,
         double_reference: bool,
-    ) -> list[Callable[..., R] | _TypedDescriptor[P, R]]:
+    ) -> list[_ImplementationSource[P, R]]:
         """Return implementation callables used for ``pytest_parametrize_pairs``."""
         # use underlying functions so pytest can generate readable IDs.
-        implementations: list[Callable[..., R] | _TypedDescriptor[P, R]]
+        implementations: list[_ImplementationSource[P, R]]
         if only_default:
             implementations = [self.callable]
             if double_reference and self.callable is not self.reference.implementation:
@@ -598,7 +585,7 @@ class Alternatives(Generic[S, P, R, Q]):
 @dataclasses.dataclass(frozen=True)
 class Implementation(Generic[S, P, R, Q]):
     alternatives: Alternatives[S, P, R, Q]
-    implementation: Callable[..., R] | _TypedDescriptor[P, R]
+    implementation: _ImplementationSource[P, R]
     label: str | None = None
 
     def __post_init__(self):
@@ -617,8 +604,6 @@ class Implementation(Generic[S, P, R, Q]):
         implementation: Callable[..., R] = _bind_implementation(
             self.implementation, None, None
         )
-        if not args:
-            return implementation(**kwargs)
         return implementation(*args, **kwargs)
 
     def __get__(
@@ -651,13 +636,13 @@ def reference(
         def inner(f: object) -> object:
             """Add the reference implementation to the alternatives"""
             return Alternatives(
-                cast(Callable[..., object] | _TypedDescriptor[..., object], f),
+                cast(_ImplementationSource[..., object], f),
                 default=default,
             )
 
         return inner
     else:
         return Alternatives(
-            cast(Callable[..., object] | _TypedDescriptor[..., object], implementation),
+            cast(_ImplementationSource[..., object], implementation),
             default=default,
         )

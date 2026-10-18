@@ -1,7 +1,7 @@
 alternative
 ===========
 
-``alternative`` is a tiny, dependency-free Python library for managing multiple
+``alternative`` is a dependency-free Python library for managing multiple
 implementations of the same function.
 
 It is designed for a common optimisation workflow:
