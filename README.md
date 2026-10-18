@@ -17,7 +17,7 @@ When optimizing a hot path, it’s common to accumulate:
 
 `alternative` keeps that workflow tidy by making implementation registration and selection first-class.
 
-The same model works for module functions, instance methods, class methods, and static methods. Public typing is shipped in [`alternative/__init__.pyi`](alternative/__init__.pyi), so type checkers and IDEs can see the original call signatures instead of losing them behind the decorator objects.
+The same model works for module functions, instance methods, class methods, and static methods. Public typing is shipped in [`alternative/__init__.pyi`](alternative/__init__.pyi), so supported type checkers can retain decorated call signatures.
 
 ## Quick example
 
@@ -131,6 +131,6 @@ When debug mode is enabled, each `Implementation` also captures a label with its
 
 `alternative` ships its stub file and `py.typed` marker in the installed package. The public typing surface lives in [`alternative/__init__.pyi`](alternative/__init__.pyi); runtime behavior lives in [`alternative/__init__.py`](alternative/__init__.py).
 
-The typing probes are checked with mypy, pyright, pyrefly, and a headless PyCharm inspection script: [`scripts/pycharm-type-probes.sh`](scripts/pycharm-type-probes.sh). The PyCharm probe covers type assertions, unresolved references, and type checker warnings in [`typing_tests/type_probes.py`](typing_tests/type_probes.py).
+CI checks the typing probes with mypy, Pyright, and Pyrefly. [`scripts/pycharm-type-probes.sh`](scripts/pycharm-type-probes.sh) separately checks type assertions, argument lists, unresolved references, and type warnings in [`typing_tests/type_probes.py`](typing_tests/type_probes.py). It uses a disposable project with the repository's Python environment and requires deliberate failure controls to be detected before accepting a clean result.
 
-Known PyCharm caveat: JetBrains `PyNestedDecoratorsInspection` currently reports a false-positive for correctly typed decorators stacked outside `@classmethod` or `@staticmethod`. Runtime behavior and type resolution are correct, and the project does not require `# noinspection PyTypeChecker` call-site suppressions for these examples.
+PyCharm 2026.2.3 has known gaps in ParamSpec return inference, variadic calls, and receiver binding. [`typing_tests/pycharm_xfails.json`](typing_tests/pycharm_xfails.json) records the exact expected diagnostics and related JetBrains issues. Unexpected diagnostics or passes fail the check; `scripts/pycharm-type-probes.sh --show-xfails` lists the recognised cases. Every assertion remains enabled for mypy, Pyright, and Pyrefly. The separate `PyNestedDecoratorsInspection` false positive for decorators outside `@classmethod` or `@staticmethod` is excluded from this check.

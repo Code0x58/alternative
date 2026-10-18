@@ -64,3 +64,25 @@ publishing job. Only that job receives ``id-token: write`` and access to the
 ``publish.yml`` workflow and ``pypi`` environment. Configure environment approval
 rules in GitHub if releases require manual review. Active runs for the same
 release tag are allowed to finish.
+
+PyCharm typing checks
+---------------------
+
+Run ``scripts/pycharm-type-probes.sh`` after syncing the development environment.
+Set ``PYCHARM_INSPECT_SH`` if ``inspect.sh`` is outside the usual Toolbox location
+and ``PYCHARM_PYTHON`` to use a different Python environment. The script copies
+the package and probes into a temporary project, configures its Python SDK, and
+requires a deliberately invalid control for every requested inspection. It leaves
+the repository and your IDE settings untouched. A clean run produces no output;
+exit status 1 reports unexpected diagnostics or passes, and status 2 means
+inspection failed, was incomplete, or the xfail manifest was invalid.
+
+The known gaps in :doc:`api` are strict expected failures listed in
+``typing_tests/pycharm_xfails.json``. Each entry identifies an assertion by its
+expression, links a related JetBrains issue, and lists its exact diagnostics.
+Formatting and line changes do not affect matching. A new diagnostic, including
+one on an already affected assertion, fails the check. Missing expected
+diagnostics produce ``XPASS`` failures; review and remove fixed expectations.
+Use ``scripts/pycharm-type-probes.sh --show-xfails`` to display the known cases.
+Do not add call-site type-checker suppressions or remove assertions to accommodate
+an IDE gap.
