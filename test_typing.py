@@ -10,7 +10,7 @@ import pytest
 
 
 @pytest.mark.parametrize("checker", ["mypy", "pyright", "pyrefly"])
-@pytest.mark.parametrize("probe_name", ["invalid_registration.py"])
+@pytest.mark.parametrize("probe_name", ["invalid_calls.py", "invalid_registration.py"])
 def test_invalid_typing_examples_are_rejected(
     tmp_path: Path, checker: str, probe_name: str
 ) -> None:

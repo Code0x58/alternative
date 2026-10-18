@@ -1,0 +1,28 @@
+import alternative
+
+@alternative.reference
+def function(count: int, label: str) -> str:
+    """Repeat a label."""
+    return label * count
+
+@alternative.reference
+def keywords(*, count: int) -> int:
+    """Require a keyword argument."""
+    return count
+
+@alternative.reference
+def positional(count: int, /) -> int:
+    """Require a positional argument."""
+    return count
+
+@alternative.reference
+def factory(kind: type[int], value: str) -> int:
+    """Create an integer."""
+    return kind(value)
+
+function(count='bad', label='x')  # error
+function(count=1, unknown='x')  # error
+function(label='x')  # error
+keywords(1)  # error
+positional(count=1)  # error
+factory('2')  # error

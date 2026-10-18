@@ -420,7 +420,7 @@ def test_instance_method_binding() -> None:
     assert Calculator.add_extra(calculator, 5) == ("extra", 15)
     assert calculator.add_extra.alternatives is Calculator.__dict__["add"]
     descriptor = cast(
-        alternative.Alternatives[Calculator, [int], tuple[str, int]],
+        alternative.Alternatives[Calculator, [int], tuple[str, int], [Calculator, int]],
         Calculator.__dict__["add"],
     )
     assert descriptor.__get__(calculator)(5) == ("default", 15)

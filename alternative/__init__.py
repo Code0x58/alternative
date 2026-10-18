@@ -48,6 +48,7 @@ class _SupportsLessThan(Protocol):
 _UNDEFINED_VALUE: Final = _Undefined()
 
 P = ParamSpec("P")
+Q = ParamSpec("Q")
 R = TypeVar("R")
 R_co = TypeVar("R_co", covariant=True)
 M = TypeVar("M")
@@ -154,12 +155,12 @@ def _bind_test_implementation(
 
 
 @dataclasses.dataclass(frozen=True)
-class _BoundAlternatives(Generic[S, P, R]):
-    alternatives: Alternatives[S, P, R]
+class _BoundAlternatives(Generic[S, P, R, Q]):
+    alternatives: Alternatives[S, P, R, Q]
     instance: object | None
     owner: Type[object] | None
 
-    def __call__(self, *args: object, **kwargs: object) -> R:
+    def __call__(self, /, *args: object, **kwargs: object) -> R:
         implementation: Callable[..., R] = _bind_implementation(
             self.alternatives.callable, self.instance, self.owner
         )
@@ -175,11 +176,11 @@ class _BoundAlternatives(Generic[S, P, R]):
         return add(implementation, default=default)
 
     @property
-    def implementations(self) -> tuple[Implementation[S, P, R], ...]:
+    def implementations(self) -> tuple[Implementation[S, P, R, Q], ...]:
         return self.alternatives.implementations
 
     @property
-    def reference(self) -> Implementation[S, P, R]:
+    def reference(self) -> Implementation[S, P, R, Q]:
         return self.alternatives.reference
 
     @property
@@ -220,19 +221,19 @@ class _BoundAlternatives(Generic[S, P, R]):
 
 
 @dataclasses.dataclass(frozen=True)
-class _BoundImplementation(Generic[S, P, R]):
-    implementation: Implementation[S, P, R]
+class _BoundImplementation(Generic[S, P, R, Q]):
+    implementation: Implementation[S, P, R, Q]
     instance: object | None
     owner: Type[object] | None
 
-    def __call__(self, *args: object, **kwargs: object) -> R:
+    def __call__(self, /, *args: object, **kwargs: object) -> R:
         implementation: Callable[..., R] = _bind_implementation(
             self.implementation.implementation, self.instance, self.owner
         )
         return implementation(*args, **kwargs)
 
     @property
-    def alternatives(self) -> Alternatives[S, P, R]:
+    def alternatives(self) -> Alternatives[S, P, R, Q]:
         return self.implementation.alternatives
 
     def add(
@@ -245,7 +246,7 @@ class _BoundImplementation(Generic[S, P, R]):
         return add(implementation, default=default)
 
 
-class Alternatives(Generic[S, P, R]):
+class Alternatives(Generic[S, P, R, Q]):
     def __init__(
         self,
         implementation: Callable[..., R] | _TypedDescriptor[P, R],
@@ -255,7 +256,7 @@ class Alternatives(Generic[S, P, R]):
         imp = Implementation(self, implementation, label=_maybe_get_caller_path())
         self._reference = imp
         # tracks the active implementation
-        self._default: Implementation[S, P, R] | None = None
+        self._default: Implementation[S, P, R, Q] | None = None
         self._debug_default: str | None = None
         self._invoked = False
         self._debug_invoked_site: str | None = None
@@ -266,7 +267,7 @@ class Alternatives(Generic[S, P, R]):
         self._debug_callable_used: str | None = None
 
         # beware the order of this depends on the sequence of imports, so may vary between entrypoints
-        self._implementations: list[Implementation[S, P, R]] = []
+        self._implementations: list[Implementation[S, P, R, Q]] = []
         self._implementations_used: bool = False
         """indicates if the list of implementations has been used though the external API"""
         self._debug_implementations_used: str | None = None
@@ -290,15 +291,15 @@ class Alternatives(Generic[S, P, R]):
 
             def wrapper(
                 implementation: Callable[..., R] | _TypedDescriptor[P, R],
-            ) -> Implementation[S, P, R]:
-                add = cast(Callable[..., Implementation[S, P, R]], self.add)
+            ) -> Implementation[S, P, R, Q]:
+                add = cast(Callable[..., Implementation[S, P, R, Q]], self.add)
                 return add(implementation, default=default)
 
             return wrapper
 
         label = _maybe_get_caller_path()
         if isinstance(implementation, Alternatives):
-            source = cast(Alternatives[S, P, R], implementation)
+            source = cast(Alternatives[S, P, R, Q], implementation)
             implementation = source.reference.implementation
         if not isinstance(implementation, Implementation):
             imp = Implementation(
@@ -331,7 +332,7 @@ class Alternatives(Generic[S, P, R]):
         return imp
 
     @property
-    def reference(self) -> Implementation[S, P, R]:
+    def reference(self) -> Implementation[S, P, R, Q]:
         """Return the immutable reference implementation."""
         return self._reference
 
@@ -355,14 +356,14 @@ class Alternatives(Generic[S, P, R]):
         return callable_
 
     @property
-    def implementations(self) -> tuple[Implementation[S, P, R], ...]:
+    def implementations(self) -> tuple[Implementation[S, P, R, Q], ...]:
         """Return an immutable snapshot and prevent further registration."""
         if not self._implementations_used:
             self._implementations_used = True
             self._debug_implementations_used = _maybe_get_caller_path()
         return tuple(self._implementations)
 
-    def __call__(self, *args: object, **kwargs: object) -> R:
+    def __call__(self, /, *args: object, **kwargs: object) -> R:
         implementation: Callable[..., R] = _bind_implementation(
             self.callable, None, None
         )
@@ -392,7 +393,7 @@ class Alternatives(Generic[S, P, R]):
         operator: Callable[[R], M],
         *args: object,
         **kwargs: object,
-    ) -> dict[Implementation[S, P, R], M]:
+    ) -> dict[Implementation[S, P, R, Q], M]:
         """Invoke each implementation with the given parameters, then evaluate their results with the operator.
 
         This is useful when comparing implementations that have different results, which can be compared by some cost.
@@ -412,7 +413,7 @@ class Alternatives(Generic[S, P, R]):
                     result.items(),
                     key=cast(
                         Callable[
-                            [tuple[Implementation[S, P, R], M]], _SupportsLessThan
+                            [tuple[Implementation[S, P, R, Q], M]], _SupportsLessThan
                         ],
                         lambda x: cast(_SupportsLessThan, x[1]),
                     ),
@@ -594,8 +595,8 @@ class Alternatives(Generic[S, P, R]):
 
 
 @dataclasses.dataclass(frozen=True)
-class Implementation(Generic[S, P, R]):
-    alternatives: Alternatives[S, P, R]
+class Implementation(Generic[S, P, R, Q]):
+    alternatives: Alternatives[S, P, R, Q]
     implementation: Callable[..., R] | _TypedDescriptor[P, R]
     label: str | None = None
 
@@ -611,7 +612,7 @@ class Implementation(Generic[S, P, R]):
             return f"Implementation({implementation_name}, label={self.label!r})"
         return f"Implementation({implementation_name})"
 
-    def __call__(self, *args: object, **kwargs: object) -> R:
+    def __call__(self, /, *args: object, **kwargs: object) -> R:
         implementation: Callable[..., R] = _bind_implementation(
             self.implementation, None, None
         )

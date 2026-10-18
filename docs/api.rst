@@ -3,6 +3,20 @@ API Reference
 
 This page documents the public API exported by ``alternative``.
 
+The stubs preserve parameter names, defaults, keyword-only arguments, and
+return types in mypy, Pyright, and Pyrefly. Instance and class access bind method
+receivers; an ordinary function accepting ``type[T]`` still requires that argument.
+
+Wrapper types now carry both the bound and complete parameter lists:
+``Alternatives[S, P, R, Q]`` and ``Implementation[S, P, R, Q]``. For explicit
+annotations, append the original signature as ``Q``. For example,
+``Alternatives[int, [str], str, [int, str]]`` wraps a function taking an integer
+and a string. Inferred decorator types need no annotations.
+
+PyCharm 2026.2.3 still reports false diagnostics for some valid keyword,
+variadic, and descriptor calls. The headless probes record this outstanding
+compatibility issue; the three CI type checkers cover these call shapes.
+
 Decorator
 ---------
 
