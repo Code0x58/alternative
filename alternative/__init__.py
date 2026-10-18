@@ -69,7 +69,7 @@ class AlternativeError(Exception):
 
 
 class AddTooLateError(AlternativeError):
-    """Cannot add implementations after the alternatives have been invoked."""
+    """Cannot add implementations after invocation or inspection."""
 
 
 class MultipleDefaultsError(AlternativeError):
@@ -155,6 +155,7 @@ class _WrappedCallable:
     def __get__(
         self, instance: _CallableMetadata | None, owner: type[object] | None = None
     ) -> object:
+        """Resolve instance targets while leaving constructor signatures unwrapped."""
         if instance is None:
             raise AttributeError("__wrapped__")
         return instance._get_wrapped_callable()
@@ -175,6 +176,7 @@ class _CallableMetadata:
         return self._wrapper_metadata
 
     def __getattribute__(self, name: str) -> object:
+        """Share standard metadata and defer annotations to the source callable."""
         if name == "__annotations__":
             source = object.__getattribute__(self, "__wrapped__")
             return getattr(source, name, {})
@@ -392,6 +394,12 @@ class _BoundImplementation(_CallableMetadata, Generic[S, P, R, Q]):
 
 
 class Alternatives(_CallableMetadata, Generic[S, P, R, Q]):
+    """Manage a reference, its candidates, and one stable runtime default.
+
+    Usually created by :func:`reference`. Register every candidate before calling
+    the set, reading ``callable`` or ``implementations``, or collecting tests.
+    """
+
     def __init__(
         self,
         implementation: _ImplementationSource[P, R],
@@ -420,6 +428,23 @@ class Alternatives(_CallableMetadata, Generic[S, P, R, Q]):
         *,
         default: bool = False,
     ) -> object:
+        """Register a compatible candidate and return its Implementation wrapper.
+
+        Omit ``implementation`` to obtain a decorator, as in
+        ``@function.add(default=True)``. Direct calls and ``@function.add`` also
+        work. Calling the returned wrapper invokes that candidate directly.
+
+        :param implementation: A callable, matching method descriptor, or another
+            alternatives set whose reference should be copied.
+        :param default: Select this candidate for normal calls. Only one explicit
+            default may be registered, including an explicitly selected reference.
+        :raises AddTooLateError: If invocation or inspection froze registration.
+        :raises MultipleDefaultsError: If an explicit default already exists.
+        :raises CrossAlternativesImplementationError: If a supplied Implementation
+            belongs to another set; pass its raw ``implementation`` to clone it.
+        :returns: An Implementation, or a decorator returning one when called
+            without an implementation.
+        """
         if self._implementations_used:
             # avoid surprises from implementation changes after selection/inspection
             if DEBUG:
@@ -639,12 +664,13 @@ class Alternatives(_CallableMetadata, Generic[S, P, R, Q]):
         """Decorator to parametrise a test function with the reference and alternative implementations.
 
         :parameter test: Inner pytest function to parameterise with reference and alternative implementations - this is elided if using the decorator syntax.
-        :parameter n_cache: Passed to lru_cache which wraps the reference implementation. Set to non-0 values for
-            it to actually cache.
+        :parameter n_cache: Passed to lru_cache which wraps the reference implementation.
+            Use a positive size or None to cache reusable results; 0 disables caching.
         :parameter double_reference: If True, the reference implementation will be included in the implementations. This
             can be used for sanity-checking equivalence tests.
         :parameter only_default: If True, only the default implementation will be used as the other implementation. If
             double_reference is True, the reference implementation will be included as well.
+        :raises ValueError: If caching is enabled for an asynchronous or generator reference.
         """
         return self._pytest_parametrize_pairs(
             test,
@@ -743,6 +769,13 @@ class Alternatives(_CallableMetadata, Generic[S, P, R, Q]):
 
 @dataclasses.dataclass(frozen=True)
 class Implementation(_CallableMetadata, Generic[S, P, R, Q]):
+    """An immutable registered candidate that remains directly callable.
+
+    ``alternatives`` identifies its registry, ``implementation`` exposes the raw
+    callable or descriptor, and ``label`` contains an optional debug call site.
+    Calling a candidate directly does not select it as the registry's default.
+    """
+
     alternatives: Alternatives[S, P, R, Q]
     implementation: _ImplementationSource[P, R]
     label: str | None = None
@@ -777,7 +810,11 @@ class Implementation(_CallableMetadata, Generic[S, P, R, Q]):
         *,
         default: bool = False,
     ) -> object:
-        """Add an alternative implementation."""
+        """Forward registration to the parent Alternatives set.
+
+        Accept the same direct-call and decorator forms as
+        :meth:`Alternatives.add`, returning an Implementation or its decorator.
+        """
         if isinstance(implementation, _Undefined):
             return self.alternatives.add(default=default)
         add = cast(Callable[..., object], self.alternatives.add)
@@ -789,6 +826,19 @@ def reference(
     *,
     default: bool = False,
 ) -> object:
+    """Create an Alternatives set from its trusted reference implementation.
+
+    Use ``@reference``, ``@reference(default=True)``, or
+    ``reference(implementation)``. The reference is the implicit runtime default
+    until another implementation is registered with ``default=True``.
+
+    :param implementation: The trusted function, callable, or method descriptor.
+        Place this decorator outside ``classmethod`` or ``staticmethod``.
+    :param default: Make the reference the explicit default, preventing another
+        registration from selecting a default.
+    :returns: An Alternatives wrapper, or a decorator returning one when called
+        without an implementation. Call signatures are preserved by the stubs.
+    """
     if isinstance(implementation, _Undefined):
 
         def inner(f: object) -> object:

@@ -21,17 +21,24 @@ Use :func:`alternative.reference` on the implementation you trust most.
 
 
    @normalise_name.add
-   def normalise_name_title(name: str) -> str:
-       return name.title()
+   def normalise_name_mapped(name: str) -> str:
+       return " ".join(map(str.capitalize, name.split()))
 
 ``normalise_name`` is now an :class:`alternative.Alternatives` object, and
-``normalise_name_title`` is an :class:`alternative.Implementation` object.
+``normalise_name_mapped`` is an :class:`alternative.Implementation` object.
 Both are callable:
 
 .. code-block:: python
 
    assert normalise_name("ada lovelace") == "Ada Lovelace"
-   assert normalise_name_title("ada lovelace") == "Ada Lovelace"
+   assert normalise_name_mapped("ada lovelace") == "Ada Lovelace"
+   for value in ("", "  ada   lovelace  ", "o'neill", "élise müller"):
+       assert normalise_name(value) == normalise_name_mapped(value)
+
+Both implementations preserve whitespace normalization and capitalization rules.
+Replacing the body with ``name.title()`` would change repeated whitespace and
+apostrophe handling. Compare edge cases before treating a rewrite as equivalent;
+benchmark representative inputs before calling it faster.
 
 Choose a Default
 ----------------
@@ -51,8 +58,8 @@ runtime implementation:
 
 
    @display_name.add(default=True)
-   def display_name_fast(name: str) -> str:
-       return name.title()
+   def display_name_mapped(name: str) -> str:
+       return " ".join(map(str.capitalize, name.split()))
 
 
    assert display_name("grace hopper") == "Grace Hopper"
@@ -96,12 +103,12 @@ alternatives set. This makes chained registration convenient:
 
    @parse_count.add
    def parse_count_decimal(text: str) -> int:
-       return int(text, 10)
+       return int(text.strip(), 10)
 
 
    @parse_count_decimal.add(default=True)
    def parse_count_fast(text: str) -> int:
-       return int(text)
+       return int(text.strip())
 
 The three implementations still belong to the same alternatives set.
 
@@ -125,7 +132,7 @@ also works on methods. Put ``@alternative.reference`` outside
 
        @parse.add(default=True)
        def parse_fast(self, value: str) -> int:
-           return int(value)
+           return int(value.strip(), 10)
 
        @alternative.reference
        @classmethod
@@ -135,7 +142,7 @@ also works on methods. Put ``@alternative.reference`` outside
        @from_text.add(default=True)
        @classmethod
        def from_text_fast(cls, value: str) -> "Parser":
-           return cls(value)
+           return cls(value.strip())
 
        @alternative.reference
        @staticmethod
@@ -145,7 +152,7 @@ also works on methods. Put ``@alternative.reference`` outside
        @is_valid.add(default=True)
        @staticmethod
        def is_valid_fast(value: str) -> bool:
-           return value.isdigit()
+           return value.strip().isdigit()
 
 
    parser = Parser.from_text("1")

@@ -96,7 +96,7 @@ class AlternativeError(Exception):
     """Base class for all alternative errors."""
 
 class AddTooLateError(AlternativeError):
-    """Cannot add implementations after the alternatives have been invoked."""
+    """Cannot add implementations after invocation or inspection."""
 
 class MultipleDefaultsError(AlternativeError):
     """Cannot set the default implementation more than once."""

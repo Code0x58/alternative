@@ -19,6 +19,22 @@ It is not a plugin system. Implementations should usually have the same
 signature and the same observable behaviour unless you are deliberately
 measuring or comparing different outputs.
 
+Selection Lifecycle
+-------------------
+
+1. Define the reference and import every candidate during application startup.
+2. Choose the default in registration code, using ``default=True`` on exactly one
+   implementation, or leave the reference as the implicit default.
+3. Collect equivalence tests and benchmarks. Inspection freezes registration.
+4. Use test and benchmark results to change the selection in source, then run a
+   fresh process to validate that choice.
+
+Calling ``measure()``, collecting either pytest helper, and reading ``callable``
+or ``implementations`` all freeze the set. You cannot measure candidates and then
+register the winner as a default in that same set. Selecting a default from a
+startup configuration is possible if the configuration is read before any of
+these operations. See :doc:`tutorial` for a complete package split across files.
+
 Measure Implementations
 -----------------------
 
