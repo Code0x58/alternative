@@ -115,6 +115,10 @@ also works on methods. Put ``@alternative.reference`` outside
 .. code-block:: python
 
    class Parser:
+       def __init__(self, value: str = ""):
+           """Store the text used to construct this parser."""
+           self.value = value
+
        @alternative.reference
        def parse(self, value: str) -> int:
            return int(value.strip())
@@ -142,6 +146,14 @@ also works on methods. Put ``@alternative.reference`` outside
        @staticmethod
        def is_valid_fast(value: str) -> bool:
            return value.isdigit()
+
+
+   parser = Parser.from_text("1")
+   assert parser.value == "1"
+   assert parser.parse("1") == parser.parse_fast("1") == 1
+   assert Parser.from_text_fast("2").value == "2"
+   assert Parser.is_valid("3")
+   assert parser.is_valid_fast("3")
 
 Calling through an instance or class binds ``self`` and ``cls`` normally. Direct
 alternative implementations also bind normally, so ``parser.parse_fast("1")``
