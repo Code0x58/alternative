@@ -155,6 +155,7 @@ class _WrappedCallable:
     def __get__(
         self, instance: _CallableMetadata | None, owner: type[object] | None = None
     ) -> object:
+        """Resolve instance targets while leaving constructor signatures unwrapped."""
         if instance is None:
             raise AttributeError("__wrapped__")
         return instance._get_wrapped_callable()
@@ -175,6 +176,7 @@ class _CallableMetadata:
         return self._wrapper_metadata
 
     def __getattribute__(self, name: str) -> object:
+        """Share standard metadata and defer annotations to the source callable."""
         if name == "__annotations__":
             source = object.__getattribute__(self, "__wrapped__")
             return getattr(source, name, {})
