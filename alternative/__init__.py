@@ -218,6 +218,18 @@ class _BoundAlternatives(_CallableMetadata, Generic[S, P, R, Q]):
     def callable(self) -> _ImplementationSource[P, R]:
         return self.alternatives.callable
 
+    def measure(
+        self,
+        /,
+        operator: Callable[[R], M],
+        *args: object,
+        **kwargs: object,
+    ) -> dict[Implementation[S, P, R, Q], M]:
+        """Measure implementations with this instance or class receiver bound."""
+        return cast(Alternatives[S, P, R, Q], self.alternatives)._measure(
+            operator, args, kwargs, instance=self.instance, owner=self.owner
+        )
+
     def pytest_parametrize(
         self,
         test: F | _Undefined = _UNDEFINED_VALUE,
@@ -445,8 +457,24 @@ class Alternatives(_CallableMetadata, Generic[S, P, R, Q]):
         The results are sorted by the operator's result if the result is sortable (i.e. does not raise TypeError when
         __lt__(a,b) is called); otherwise they are returned in the order of the implementations.
         """
+        return self._measure(operator, args, kwargs, instance=None, owner=None)
+
+    def _measure(
+        self,
+        operator: Callable[[R], M],
+        args: tuple[object, ...],
+        kwargs: dict[str, object],
+        *,
+        instance: object | None,
+        owner: type[object] | None,
+    ) -> dict[Implementation[S, P, R, Q], M]:
+        """Measure each implementation while preserving its binding context."""
         result = {
-            i: operator(cast(Callable[..., R], i)(*args, **kwargs))
+            i: operator(
+                _bind_test_implementation(i.implementation, instance, owner)(
+                    *args, **kwargs
+                )
+            )
             for i in self.implementations
         }
         try:

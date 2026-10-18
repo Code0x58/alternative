@@ -51,6 +51,13 @@ The result is a dictionary keyed by :class:`alternative.Implementation` objects.
 If the measurement values are sortable, the dictionary is returned in ascending
 measurement order. If values cannot be sorted, registration order is preserved.
 
+For methods, ``instance.method.measure(operator, ...)`` binds the instance and
+``Class.class_method.measure(operator, ...)`` binds the accessed class, including
+subclasses. Accessing an ordinary method through its class leaves its receiver
+explicit: ``Class.method.measure(operator, instance, ...)``. Static methods never
+receive an implicit receiver. Measurements freeze registration and retain the
+existing selected default.
+
 Safety Rules
 ------------
 

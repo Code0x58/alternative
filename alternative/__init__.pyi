@@ -219,6 +219,13 @@ class _BoundAlternatives(_CallableMetadata, _PytestDecorators, Generic[_S, _P, _
     def reference(self) -> Implementation[_S, _P, _R, _Q]: ...
     @property
     def callable(self) -> Callable[_Q, _R] | _TypedDescriptor[_P, _R]: ...
+    def measure(
+        self,
+        /,
+        operator: Callable[[_R], _M],
+        *args: _P.args,
+        **kwargs: _P.kwargs,
+    ) -> dict[Implementation[_S, _P, _R, _Q], _M]: ...
 
 class _BoundImplementation(_CallableMetadata, Generic[_S, _P, _R, _Q]):
     __match_args__ = ("implementation", "instance", "owner")
