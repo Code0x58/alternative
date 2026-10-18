@@ -24,13 +24,15 @@ Install
 
 ``alternative`` supports Python 3.10 and newer.
 
-The runtime has no dependencies. Install ``pytest`` to use the test helpers,
-``pytest-benchmark`` for the benchmark fixture, and ``pytest-asyncio`` when testing
-async functions:
+The runtime has no dependencies. Install ``pytest`` to use the test helpers
+and ``pytest-benchmark`` for the benchmark fixture:
 
 .. code-block:: console
 
    $ pip install alternative pytest pytest-benchmark
+
+For async tests, also install ``pytest-asyncio`` or another async pytest plugin;
+see :ref:`async-tests`.
 
 The installed package includes type stubs and a ``py.typed`` marker, so type
 checkers can use its annotations without additional configuration.
@@ -45,6 +47,7 @@ A First Example
 
    @alternative.reference
    def total(values: list[int]) -> int:
+       """Sum integers with a straightforward reference loop."""
        result = 0
        for value in values:
            result += value
@@ -53,6 +56,7 @@ A First Example
 
    @total.add(default=True)
    def total_builtin(values: list[int]) -> int:
+       """Use the built-in sum with the same integer contract."""
        return sum(values)
 
 
@@ -61,20 +65,37 @@ A First Example
 
 Calling ``total`` uses the selected default implementation. Calling
 ``total_builtin`` directly still calls that implementation by itself, which is
-useful in tests and benchmarks.
+useful in tests and benchmarks. This shows a selected default; choose it after
+checking correctness and measuring representative inputs.
+
+Start with :doc:`quickstart` to add tests and benchmarks. If your implementations
+live in separate modules, follow :doc:`tutorial` for startup imports and a
+complete runnable package.
 
 Contents
 --------
 
 .. toctree::
    :maxdepth: 2
+   :caption: Start Here
 
    quickstart
    tutorial
-   workflow
-   performance
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Guides
+
    pytest
    testing-contracts
+   workflow
+   methods
+   performance
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Reference and Development
+
    api
    contributing
 

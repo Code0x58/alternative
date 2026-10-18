@@ -1,9 +1,9 @@
 Runtime Workflow
 ================
 
-``alternative`` is most useful when you want implementation choice to be visible
-in code review instead of hidden behind conditionals or environment-specific
-imports.
+This guide explains registration and selection after the examples in
+:doc:`quickstart` and :doc:`tutorial`. Implementation choice stays explicit in
+registration code, so reviewers can see which candidate application calls use.
 
 When to Use It
 --------------
@@ -25,54 +25,65 @@ Selection Lifecycle
 1. Define the reference and import every candidate during application startup.
 2. Choose the default in registration code, using ``default=True`` on exactly one
    implementation, or leave the reference as the implicit default.
-3. Collect equivalence tests and benchmarks. Inspection freezes registration.
+3. Apply pytest helpers to equivalence tests and benchmarks, freezing registration.
 4. Use test and benchmark results to change the selection in source, then run a
    fresh process to validate that choice.
 
-Calling ``measure()``, collecting either pytest helper, and reading ``callable``
-or ``implementations`` all freeze the set. You cannot measure candidates and then
-register the winner as a default in that same set. Selecting a default from a
-startup configuration is possible if the configuration is read before any of
-these operations. See :doc:`tutorial` for a complete package split across files.
+Calling the alternatives object or ``measure()``, applying either pytest helper
+to a test function, and reading ``callable`` or ``implementations`` all freeze the
+set. Test decorators usually run while pytest imports test modules for
+collection. You cannot measure candidates and then register the winner as a
+default in that same set. Selecting a default from startup configuration is
+possible if it is read before any of these operations. See :doc:`tutorial` for a complete package split across files.
+
+.. _measure-implementations:
 
 Measure Implementations
 -----------------------
 
-:meth:`alternative.Alternatives.measure` calls every implementation with the
-same arguments and then applies an operator to each result.
+:meth:`alternative.Alternatives.measure` scores returned results with a callable
+you provide. It does not measure elapsed time. For example, compressors can
+produce different bytes that decode to the same input. Validate that contract,
+then compare output sizes:
 
 .. code-block:: python
+
+   import zlib
 
    import alternative
 
 
    @alternative.reference
-   def make_four() -> str:
-       return "1 + 1 + 1 + 1"
+   def compress(data: bytes) -> bytes:
+       """Compress bytes with a low compression level."""
+       return zlib.compress(data, level=1)
 
 
-   @make_four.add
-   def make_four_factor() -> str:
-       return "2 * 2"
+   @compress.add
+   def compress_dense(data: bytes) -> bytes:
+       """Use a higher compression level with the same decoding contract."""
+       return zlib.compress(data, level=9)
 
 
-   @make_four.add
-   def make_four_literal() -> str:
-       return "4"
+   data = b"repeated content " * 1_000
+   for implementation in compress.implementations:
+       assert zlib.decompress(implementation(data)) == data
 
-
-   measurements = make_four.measure(len)
+   sizes = compress.measure(len, data)
+   assert sizes[compress.reference] == len(compress.reference(data))
+   assert sizes[compress_dense] == len(compress_dense(data))
+   assert list(sizes.values()) == sorted(sizes.values())
 
 The result is a dictionary keyed by :class:`alternative.Implementation` objects.
-If the measurement values are sortable, the dictionary is returned in ascending
-measurement order. If values cannot be sorted, registration order is preserved.
+Sortable scores are returned in ascending order; otherwise registration order
+is preserved. A lower score is not necessarily the best choice for your
+application: compression time may matter as well as size. The selected default
+stays unchanged, and measurement freezes registration.
 
-For methods, ``instance.method.measure(operator, ...)`` binds the instance and
-``Class.class_method.measure(operator, ...)`` binds the accessed class, including
-subclasses. Accessing an ordinary method through its class leaves its receiver
-explicit: ``Class.method.measure(operator, instance, ...)``. Static methods never
-receive an implicit receiver. Measurements freeze registration and retain the
-existing selected default.
+Arguments are passed to every implementation without copying. For mutation,
+state, or single-use inputs, use tests that create independent inputs as described
+in :doc:`testing-contracts`. For receiver binding, see :doc:`methods`. Use
+:doc:`performance` for elapsed-time measurement.
 
 Safety Rules
 ------------
@@ -120,50 +131,73 @@ implementations were first inspected. Implementation ``repr(...)`` output also
 includes registration labels, which makes similarly named local functions easier
 to distinguish.
 
+Registration Forms
+------------------
+
+Use decorators when defining implementations together. Direct calls are useful
+when registering an imported function:
+
+.. code-block:: python
+
+   @alternative.reference
+   def parse_count(text: str) -> int:
+       """Parse a stripped decimal integer."""
+       return int(text.strip())
+
+
+   def parse_count_decimal(text: str) -> int:
+       """Let int handle whitespace with an explicit decimal base."""
+       return int(text, 10)
+
+
+   decimal = parse_count.add(parse_count_decimal)
+
+An :class:`alternative.Implementation` forwards ``.add`` to its parent set, so a
+further candidate can register through ``decimal``:
+
+.. code-block:: python
+
+   @decimal.add
+   def parse_count_trimmed(text: str) -> int:
+       """Trim each end before parsing the integer."""
+       return int(text.lstrip().rstrip())
+
+All three implementations belong to ``parse_count``. Normal calls still use its
+reference because no explicit default was selected.
+
 Copying Implementations
 -----------------------
 
-.. invisible-code-block: python
-
-   import alternative
-
-   @alternative.reference
-   def source_alternatives() -> int:
-       return 1
-
-   @source_alternatives.add(default=True)
-   def source_candidate() -> int:
-       return 2
-
-   @alternative.reference
-   def target() -> int:
-       return 10
-
-   source_implementation = source_alternatives.implementations[1]
-
 An :class:`alternative.Alternatives` object can be added to another alternatives
-set, which copies its underlying reference implementation:
+set. This copies its underlying reference implementation, independently of its
+selected default. Using ``parse_count`` from the preceding example:
 
 .. code-block:: python
 
-   copied = target.add(source_alternatives)
-   assert copied() == 1
-   assert source_alternatives() == 2
+   @alternative.reference
+   def parse_other(text: str) -> int:
+       """Parse decimal input in a separate alternatives set."""
+       return int(text)
 
-The copy is independent of the source set's selected default. Calling it does
-not freeze registration in the source set.
+
+   copied = parse_other.add(parse_count)
+   assert copied.implementation is parse_count.reference.implementation
+   assert copied(" 2 ") == 2
+
+Calling the copy does not freeze registration in the source set.
 
 An :class:`alternative.Implementation` from a different alternatives set cannot
-be added directly. Pass ``implementation.implementation`` if you deliberately
-want to clone the raw callable:
+be added directly. To copy the ``decimal`` candidate registered above, pass its
+raw callable:
 
 .. code-block:: python
 
-   target.add(source_implementation.implementation)
+   cloned = parse_other.add(decimal.implementation)
+   assert cloned(" 2 ") == 2
 
 This distinction avoids accidentally wiring one alternatives set into another.
 
-Typing registrations
+Typing Registrations
 --------------------
 
 Candidates must accept every call allowed by the reference and return a
@@ -171,3 +205,7 @@ compatible type. This applies to ``.add(candidate)``, ``@reference.add``, and
 ``@reference.add(default=True)``. Preserve parameter names and defaults when
 callers use them; broader parameter types and additional optional arguments are
 allowed. The checkers validate signatures without executing registrations.
+
+Runtime registration does not check signature compatibility. Run a type checker
+to catch incompatible candidates before running the program. See :doc:`api` for
+typing and IDE compatibility.

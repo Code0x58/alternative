@@ -2,24 +2,19 @@
 
 # alternative
 
-A dependency-free library for managing multiple implementations of the same function — especially when you're iterating toward faster or cleaner versions and want those choices to stay explicit, testable, and safe.
+Keep a trusted Python implementation alongside candidate rewrites, test them with pytest, and choose which one normal callers use. `alternative` supports functions and methods, preserves their type signatures, and has no runtime dependencies. It requires Python 3.10 or newer.
 
-Full documentation is available on [Read the Docs](https://alternative.readthedocs.io/en/latest/). The documentation source lives in [`docs/`](docs/).
+Use it when optimizing an existing function or comparing algorithms with the same public contract. You provide the correctness tests and benchmarks; the library registers implementations and keeps the selected default stable.
 
-## Why use this?
+## Install
 
-When optimizing a hot path, it’s common to accumulate:
+```console
+pip install alternative pytest pytest-benchmark
+```
 
-- a trusted reference implementation
-- one or more candidate rewrites
-- tests to keep them equivalent
-- benchmarks to validate wins
+Only `alternative` is needed at runtime. The other packages provide the testing and timing tools used below.
 
-`alternative` keeps that workflow tidy by making implementation registration and selection first-class.
-
-The same model works for module functions, instance methods, class methods, and static methods. Public typing is shipped in [`alternative/__init__.pyi`](alternative/__init__.pyi), so supported type checkers can retain decorated call signatures.
-
-## Quick example
+## Register and call implementations
 
 ```python
 import alternative
@@ -34,7 +29,7 @@ def total(values: list[int]) -> int:
     return result
 
 
-@total.add(default=True)
+@total.add
 def total_builtin(values: list[int]) -> int:
     """Register a candidate with the same contract."""
     return sum(values)
@@ -44,94 +39,48 @@ assert total([1, 2, 3]) == 6
 assert total_builtin([1, 2, 3]) == 6
 ```
 
-Install with `pip install alternative`; add `pytest` and `pytest-benchmark` for the testing workflow.
+`total(...)` uses the reference until you select an explicit default. `total_builtin(...)` always calls that candidate directly.
 
-See the [quickstart](https://alternative.readthedocs.io/en/latest/quickstart.html) for registration patterns, defaults, and method examples.
+## Test and benchmark
 
-## Methods and descriptors
-
-Decorate instance methods directly. For `@classmethod` and `@staticmethod`, put `@alternative.reference` and `.add(...)` outside the built-in descriptor decorator:
+In the same file, or in a test module that imports `total`, add:
 
 ```python
-import alternative
+import pytest
 
 
-class Parser:
-    def __init__(self, value: str = ""):
-        self.value = value
+@total.pytest_parametrize()
+@pytest.mark.parametrize(("values", "expected"), [([], 0), ([1, -2, 3], 2)])
+def test_expected_totals(implementation, values, expected):
+    """Check every implementation against independent expected results."""
+    assert implementation(values) == expected
 
-    @alternative.reference
-    def parse(self, value: str) -> int:
-        return int(value.strip())
 
-    @parse.add(default=True)
-    def parse_fast(self, value: str) -> int:
-        return int(value.strip(), 10)
+@total.pytest_parametrize_pairs()
+def test_equivalent_totals(reference, implementation):
+    """Compare each candidate with the reference."""
+    values = [1, 2, 3]
+    assert implementation(values) == reference(values)
 
-    @alternative.reference
-    @classmethod
-    def from_text(cls, value: str) -> "Parser":
-        return cls(value.strip())
 
-    @from_text.add(default=True)
-    @classmethod
-    def from_text_fast(cls, value: str) -> "Parser":
-        return cls(value.strip())
-
-    @alternative.reference
-    @staticmethod
-    def is_valid(value: str) -> bool:
-        return value.strip().isdigit()
-
-    @is_valid.add(default=True)
-    @staticmethod
-    def is_valid_fast(value: str) -> bool:
-        return value.strip().isdigit()
+@total.pytest_parametrize()
+def test_total_benchmark(benchmark, implementation):
+    """Time each implementation on the same input."""
+    assert benchmark(implementation, list(range(1_000))) == 499_500
 ```
 
-Calling through an instance or class follows normal Python binding rules, and direct implementation calls bind the same way. The full descriptor examples are in [Use Methods](https://alternative.readthedocs.io/en/latest/quickstart.html#use-methods) and [Testing Methods](https://alternative.readthedocs.io/en/latest/pytest.html#testing-methods).
+Save the combined example as `test_totals.py` and run `pytest test_totals.py`. The helpers supply `implementation` and `reference`; they are callable test parameters, not fixtures you need to write.
 
-## Pytest features
+After checking correctness and measuring representative inputs, edit the candidate registration to `@total.add(default=True)` and run a fresh process. Normal calls to `total(...)` will then use that candidate. The library does not choose a winner automatically.
 
-The pytest helpers are documented in the [pytest integration guide](https://alternative.readthedocs.io/en/latest/pytest.html).
+Register every candidate before calling the alternatives object or applying a pytest helper. Those operations freeze registration, as do reading `.callable` or `.implementations` and calling `.measure(...)`. This prevents collected tests from silently missing later imports. Set `ALTERNATIVE_DEBUG=1` to include the earlier registration or inspection location in relevant errors.
 
-### Pairwise equivalence checks
+## Next steps
 
-Use `pytest_parametrize_pairs(...)` to compare the reference against each candidate implementation.
-
-- [Equivalence Tests](https://alternative.readthedocs.io/en/latest/pytest.html#equivalence-tests)
-- [Reference Caching](https://alternative.readthedocs.io/en/latest/pytest.html#reference-caching)
-
-### Single-implementation parametrization
-
-Use `pytest_parametrize(...)` to run one test body across all implementations.
-
-- [Only the Default Implementation](https://alternative.readthedocs.io/en/latest/pytest.html#only-the-default-implementation)
-- [Benchmark All Implementations](https://alternative.readthedocs.io/en/latest/pytest.html#benchmark-all-implementations) with [`pytest-benchmark`](https://pypi.org/project/pytest-benchmark/)
-
-The [complete workflow](docs/tutorial.rst) includes startup imports, independent correctness tests, equivalence tests, and production benchmarks. See [testing contracts](docs/testing-contracts.rst) for mutation, exception, and cache behavior, and [call overhead](docs/performance.rst) for reproducible dispatch measurements.
-
-## Runtime tools
-
-`Alternatives.measure(...)` runs every implementation with the same arguments and measures the results with a callable you provide. See [Measure Implementations](https://alternative.readthedocs.io/en/latest/workflow.html#measure-implementations).
-
-## Safety guarantees
-
-The library tries to avoid unpleasant surprises caused by import order or accidental state changes:
-
-- The selected implementation cannot be changed once it has been used.
-- Implementations cannot be added once they have been inspected, reducing the chance that tests only covered a subset.
-
-## Debug mode
-
-Set `ALTERNATIVE_DEBUG=1` to record where critical state changes happened (like selecting defaults or inspecting implementations). These locations are surfaced in error messages to make stateful issues easier to track down.
-
-When debug mode is enabled, each `Implementation` also captures a label with its registration call-site. This label appears in `repr(...)` and selected debug errors, making it easier to disambiguate implementation instances.
-
-## Typing and IDEs
-
-`alternative` ships its stub file and `py.typed` marker in the installed package. The public typing surface lives in [`alternative/__init__.pyi`](alternative/__init__.pyi); runtime behavior lives in [`alternative/__init__.py`](alternative/__init__.py).
-
-CI checks the typing probes with mypy, Pyright, and Pyrefly. [`scripts/pycharm-type-probes.sh`](scripts/pycharm-type-probes.sh) separately checks type assertions, argument lists, unresolved references, and type warnings in [`typing_tests/type_probes.py`](typing_tests/type_probes.py). It uses a disposable project with the repository's Python environment and requires deliberate failure controls to be detected before accepting a clean result.
-
-PyCharm 2026.2.3 has known gaps in ParamSpec return inference, variadic calls, and receiver binding. [`typing_tests/pycharm_xfails.json`](typing_tests/pycharm_xfails.json) records the exact expected diagnostics and related JetBrains issues. Unexpected diagnostics or passes fail the check; `scripts/pycharm-type-probes.sh --show-xfails` lists the recognised cases. Every assertion remains enabled for mypy, Pyright, and Pyrefly. The separate `PyNestedDecoratorsInspection` false positive for decorators outside `@classmethod` or `@staticmethod` is excluded from this check.
+- [Quickstart](https://alternative.readthedocs.io/en/latest/quickstart.html): register, test, benchmark, and select a default.
+- [Complete workflow](https://alternative.readthedocs.io/en/latest/tutorial.html): separate implementation, startup, and test files.
+- [Pytest integration](https://alternative.readthedocs.io/en/latest/pytest.html) and [testing contracts](https://alternative.readthedocs.io/en/latest/testing-contracts.html): expected results, mutation, exceptions, async tests, and reference caching.
+- [Methods](https://alternative.readthedocs.io/en/latest/methods.html): instance, class, and static methods and decorator order.
+- [Runtime workflow](https://alternative.readthedocs.io/en/latest/workflow.html): registration rules, debugging, and scoring returned results with `.measure(...)`.
+- [Call overhead](https://alternative.readthedocs.io/en/latest/performance.html): timing the production entry point as well as its underlying algorithm.
+- [API and IDE compatibility](https://alternative.readthedocs.io/en/latest/api.html) and [contributing](https://alternative.readthedocs.io/en/latest/contributing.html).

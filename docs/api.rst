@@ -3,6 +3,8 @@ API Reference
 
 This page documents the public API exported by ``alternative``.
 
+.. py:module:: alternative
+
 Decorator
 ---------
 
@@ -25,7 +27,7 @@ Alternatives
 The ellipsis in these signatures means the implementation or test may be omitted for
 decorator-factory syntax. It is not a value to pass to the API. Runtime
 registration does not validate signature compatibility; type checkers validate
-the public contracts described above.
+the registration contracts in :ref:`typing-and-ides`.
 
 Implementation
 --------------
@@ -48,8 +50,14 @@ Exceptions
 
 .. autoexception:: alternative.CrossAlternativesImplementationError
 
+.. _typing-and-ides:
+
 Typing and IDEs
 ---------------
+
+Candidates must accept all calls permitted by the reference and return a
+compatible type. Runtime registration does not enforce this contract; use a
+type checker to validate candidates.
 
 The stubs preserve parameter names, defaults, keyword-only arguments, and
 return types in mypy, Pyright, and Pyrefly. Instance and class access bind method
@@ -61,11 +69,9 @@ receiver binding on method access. Inspecting metadata does not freeze
 registration. The alternatives object describes the reference's public contract;
 each candidate wrapper describes its own implementation.
 
-Wrapper types now carry both the bound and complete parameter lists:
-``Alternatives[S, P, R, Q]`` and ``Implementation[S, P, R, Q]``. For explicit
-annotations, append the original signature as ``Q``. For example,
-``Alternatives[int, [str], str, [int, str]]`` wraps a function taking an integer
-and a string. Inferred decorator types need no annotations.
+Normally, let the decorators infer wrapper types; no extra annotations are
+needed at call sites. For explicit wrapper annotations and the generic parameter
+model, see :ref:`typing-model`.
 
 PyCharm compatibility
 ---------------------
@@ -85,14 +91,7 @@ PyCharm 2026.2.3 has three known ParamSpec-related gaps:
    * - Instance and class methods
      - Retains a bound ``self`` or ``cls`` parameter.
 
-``typing_tests/pycharm_xfails.json`` records each affected assertion and its exact
-expected diagnostics. These expected failures apply only to the headless PyCharm
-check; all assertions remain active for mypy, Pyright, and Pyrefly, and runtime
-tests execute the same call shapes. New diagnostics and unexpected passes fail
-the check so that fixed cases can be removed from the manifest.
-
-The standalone ``typing_tests/pycharm_paramspec_repro.py`` reproduces callback
-inference without importing this library. Related JetBrains reports cover
-`ParamSpec matching outside Callable
-<https://youtrack.jetbrains.com/issue/PY-77541>`_ and `decorated method binding
-<https://youtrack.jetbrains.com/issue/PY-85027>`_.
+These are IDE diagnostic limitations; they do not change runtime binding.
+Mypy, Pyright, and Pyrefly check the affected call shapes. See
+:ref:`pycharm-typing-checks` for reproductions, related JetBrains reports, and the
+contributor workflow for tracking expected diagnostics.
