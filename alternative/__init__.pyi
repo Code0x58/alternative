@@ -107,12 +107,16 @@ class CrossAlternativesImplementationError(AlternativeError):
 class _CallableMetadata:
     """Describe the standard metadata preserved on callable wrappers."""
 
-    __wrapped__: object
+    _wrapper_metadata: dict[str, object]
+
+    @property
+    def __wrapped__(self) -> object: ...
     __name__: str
     __qualname__: str
     __module__: str
     __doc__: str | None
     __annotations__: dict[str, object]
+    def _get_wrapper_metadata(self) -> dict[str, object]: ...
     def __getattribute__(self, name: str) -> object: ...
 
 @type_check_only
@@ -147,6 +151,7 @@ class _BoundAlternatives(_CallableMetadata, _PytestDecorators, Generic[_S, _P, _
     alternatives: Alternatives[_S, _P, _R, _Q]
     instance: object | None
     owner: type[object] | None
+    _bound_callable: Callable[_P, _R] | None
     if sys.version_info >= (3, 13):
         def __replace__(
             self, /, **changes: object
@@ -157,7 +162,6 @@ class _BoundAlternatives(_CallableMetadata, _PytestDecorators, Generic[_S, _P, _
         instance: object | None,
         owner: type[object] | None,
     ) -> None: ...
-    def __post_init__(self) -> None: ...
     @overload
     def __call__(self: _BoundAlternatives[_S, [], _R, _Q], /) -> _R: ...
     @overload
@@ -232,6 +236,7 @@ class _BoundImplementation(_CallableMetadata, Generic[_S, _P, _R, _Q]):
     implementation: Implementation[_S, _P, _R, _Q]
     instance: object | None
     owner: type[object] | None
+    _bound_callable: Callable[_P, _R]
     if sys.version_info >= (3, 13):
         def __replace__(
             self, /, **changes: object

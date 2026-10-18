@@ -90,6 +90,13 @@ def test_incomplete_callable_metadata_does_not_prevent_registration(source) -> N
     assert wrapped.__annotations__ == {}
 
 
+def test_missing_optional_metadata_remains_missing() -> None:
+    """Callables without names still raise AttributeError when a name is requested."""
+    wrapped = alternative.reference(partial(int, base=10))
+    with pytest.raises(AttributeError):
+        _ = wrapped.__name__
+
+
 def test_metadata_does_not_copy_implementation_state() -> None:
     """Function attributes cannot overwrite a wrapper's registration helpers."""
 

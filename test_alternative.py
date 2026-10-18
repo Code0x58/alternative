@@ -499,6 +499,9 @@ def test_bound_attribute_access_does_not_freeze_implementations() -> None:
         return 2
 
     assert bound_value() == 2
+    assert bound_value() == 2
+    with pytest.raises(alternative.AddTooLateError):
+        Counter.value.add(lambda self: 3)
 
 
 def test_bound_method_registration_delegates_to_alternatives() -> None:

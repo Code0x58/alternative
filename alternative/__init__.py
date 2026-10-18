@@ -130,9 +130,9 @@ def _bind_implementation(
     if owner is None and instance is not None:
         owner = type(instance)
 
-    if hasattr(implementation, "__get__") and owner is not None:
-        return cast(_TypedDescriptor[P, R], implementation).__get__(instance, owner)
-    return cast(Callable[..., R], implementation)
+    if owner is not None and hasattr(implementation, "__get__"):
+        return cast("_TypedDescriptor[P, R]", implementation).__get__(instance, owner)
+    return cast("Callable[..., R]", implementation)
 
 
 def _bind_test_implementation(
@@ -146,13 +146,32 @@ def _bind_test_implementation(
     return _bind_implementation(implementation, instance, owner)
 
 
+_WRAPPER_ATTRIBUTES = frozenset(WRAPPER_ASSIGNMENTS) - {"__annotations__"}
+
+
 class _CallableMetadata:
     """Resolve annotations lazily on the original callable across Python versions."""
+
+    _wrapper_metadata: dict[str, object]
+
+    @property
+    def __wrapped__(self) -> object:
+        """Expose the source callable without allowing it to replace dispatch state."""
+        return self._wrapper_metadata["__wrapped__"]
+
+    def _get_wrapper_metadata(self) -> dict[str, object]:
+        """Return metadata captured at registration."""
+        return self._wrapper_metadata
 
     def __getattribute__(self, name: str) -> object:
         if name == "__annotations__":
             source = object.__getattribute__(self, "__wrapped__")
             return getattr(source, name, {})
+        if name in _WRAPPER_ATTRIBUTES:
+            try:
+                return self._get_wrapper_metadata()[name]
+            except KeyError:
+                raise AttributeError(name) from None
         return object.__getattribute__(self, name)
 
 
@@ -165,6 +184,7 @@ def _set_wrapper_metadata(
         if isinstance(implementation, (classmethod, staticmethod))
         else implementation
     )
+    metadata: dict[str, object] = {}
     for name in (*WRAPPER_ASSIGNMENTS, "__annotations__"):
         if name == "__annotations__":
             continue
@@ -172,8 +192,11 @@ def _set_wrapper_metadata(
             value = getattr(source, name)
         except AttributeError:
             continue
-        object.__setattr__(wrapper, name, value)
-    object.__setattr__(wrapper, "__wrapped__", source)
+        metadata[name] = value
+    metadata["__wrapped__"] = source
+    object.__setattr__(wrapper, "_wrapper_metadata", metadata)
+    attributes = cast("dict[str, object]", object.__getattribute__(wrapper, "__dict__"))
+    attributes.update(metadata)
 
 
 def _wrap_pytest_test(test: F) -> F:
@@ -223,20 +246,28 @@ class _BoundAlternatives(_CallableMetadata, Generic[S, P, R, Q]):
     alternatives: Alternatives[S, P, R, Q]
     instance: object | None
     owner: type[object] | None
+    _bound_callable: Callable[..., R] | None = dataclasses.field(
+        default=None, init=False, repr=False, compare=False
+    )
 
-    def __post_init__(self) -> None:
-        """Expose the reference's signature with this receiver already bound."""
-        _set_wrapper_metadata(
-            self,
-            _bind_implementation(
-                self.alternatives.reference.implementation, self.instance, self.owner
-            ),
+    def _get_wrapper_metadata(self) -> dict[str, object]:
+        """Share the registered reference metadata without copying it on lookup."""
+        return self.alternatives._wrapper_metadata
+
+    @property
+    def __wrapped__(self) -> Callable[..., R]:
+        """Bind the reference lazily when introspection requests it."""
+        return _bind_implementation(
+            self.alternatives.reference.implementation, self.instance, self.owner
         )
 
     def __call__(self, /, *args: object, **kwargs: object) -> R:
-        implementation: Callable[..., R] = _bind_implementation(
-            self.alternatives.callable, self.instance, self.owner
-        )
+        implementation = self._bound_callable
+        if implementation is None:
+            implementation = _bind_implementation(
+                self.alternatives.callable, self.instance, self.owner
+            )
+            object.__setattr__(self, "_bound_callable", implementation)
         return implementation(*args, **kwargs)
 
     def add(
@@ -313,21 +344,31 @@ class _BoundImplementation(_CallableMetadata, Generic[S, P, R, Q]):
     implementation: Implementation[S, P, R, Q]
     instance: object | None
     owner: type[object] | None
+    _bound_callable: Callable[..., R] = dataclasses.field(
+        init=False, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
-        """Expose this implementation's bound signature and documentation."""
-        _set_wrapper_metadata(
+        """Bind this immutable implementation once for calls and introspection."""
+        object.__setattr__(
             self,
+            "_bound_callable",
             _bind_implementation(
                 self.implementation.implementation, self.instance, self.owner
             ),
         )
 
+    def _get_wrapper_metadata(self) -> dict[str, object]:
+        """Share metadata without copying it on every descriptor access."""
+        return self.implementation._wrapper_metadata
+
+    @property
+    def __wrapped__(self) -> Callable[..., R]:
+        """Expose the correctly bound implementation for introspection."""
+        return self._bound_callable
+
     def __call__(self, /, *args: object, **kwargs: object) -> R:
-        implementation: Callable[..., R] = _bind_implementation(
-            self.implementation.implementation, self.instance, self.owner
-        )
-        return implementation(*args, **kwargs)
+        return self._bound_callable(*args, **kwargs)
 
     @property
     def alternatives(self) -> Alternatives[S, P, R, Q]:
@@ -463,10 +504,11 @@ class Alternatives(_CallableMetadata, Generic[S, P, R, Q]):
         return tuple(self._implementations)
 
     def __call__(self, /, *args: object, **kwargs: object) -> R:
-        implementation: Callable[..., R] = _bind_implementation(
-            self.callable, None, None
-        )
-        return implementation(*args, **kwargs)
+        implementation = self._callable
+        if implementation is None:
+            implementation = self.callable
+        callable_ = cast("Callable[..., R]", implementation)
+        return callable_(*args, **kwargs)
 
     def __get__(
         self, instance: object | None, owner: type[object] | None = None
@@ -712,9 +754,7 @@ class Implementation(_CallableMetadata, Generic[S, P, R, Q]):
         return f"Implementation({implementation_name})"
 
     def __call__(self, /, *args: object, **kwargs: object) -> R:
-        implementation: Callable[..., R] = _bind_implementation(
-            self.implementation, None, None
-        )
+        implementation = cast("Callable[..., R]", self.implementation)
         return implementation(*args, **kwargs)
 
     def __get__(
