@@ -60,3 +60,18 @@ publishing job. Only that job receives ``id-token: write`` and access to the
 ``publish.yml`` workflow and ``pypi`` environment. Configure environment approval
 rules in GitHub if releases require manual review. Active runs for the same
 release tag are allowed to finish.
+
+PyCharm typing checks
+---------------------
+
+Run ``scripts/pycharm-type-probes.sh`` after syncing the development environment.
+Set ``PYCHARM_INSPECT_SH`` if ``inspect.sh`` is outside the usual Toolbox location
+and ``PYCHARM_PYTHON`` to use a different Python environment. The script copies
+the package and probes into a temporary project, configures its Python SDK, and
+requires a deliberately invalid control for every requested inspection. It leaves
+the repository and your IDE settings untouched. A clean run produces no output;
+exit status 1 reports probe diagnostics, and status 2 means inspection failed or
+was incomplete.
+
+The full signature probes currently expose PyCharm compatibility failures; see
+:doc:`api`. Do not treat passing CI checks as evidence that these IDE probes pass.

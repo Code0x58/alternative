@@ -16,6 +16,12 @@ and a string. Inferred decorator types need no annotations.
 PyCharm 2026.2.3 still reports false diagnostics for some valid keyword,
 variadic, and descriptor calls. The headless probes record this outstanding
 compatibility issue; the three CI type checkers cover these call shapes.
+``typing_tests/pycharm_paramspec_repro.py`` contains a minimal callback-protocol
+reproduction that does not import this library. It passes the three CI checkers
+but PyCharm infers ``Any`` for the keyword call's result. Related JetBrains
+reports track `ParamSpec matching outside Callable
+<https://youtrack.jetbrains.com/issue/PY-77541>`_ and `decorated method binding
+<https://youtrack.jetbrains.com/issue/PY-85027>`_.
 
 Decorator
 ---------
