@@ -136,6 +136,23 @@ def _bind_implementation(
     return cast(Callable[..., R], implementation)
 
 
+def _bind_test_implementation(
+    implementation: Callable[..., R] | _TypedDescriptor[P, R],
+    instance: object | None,
+    owner: Type[object] | None,
+) -> Callable[..., R]:
+    """Bind test parameters, or unwrap descriptors that need an explicit receiver."""
+    if owner is None:
+        descriptor = (
+            implementation.implementation
+            if isinstance(implementation, Implementation)
+            else implementation
+        )
+        if isinstance(descriptor, (classmethod, staticmethod)):
+            return cast(Callable[..., R], descriptor.__func__)
+    return _bind_implementation(implementation, instance, owner)
+
+
 @dataclasses.dataclass(frozen=True)
 class _BoundAlternatives(Generic[S, P, R]):
     alternatives: Alternatives[S, P, R]
@@ -158,7 +175,7 @@ class _BoundAlternatives(Generic[S, P, R]):
         return add(implementation, default=default)
 
     @property
-    def implementations(self) -> list[Implementation[S, P, R]]:
+    def implementations(self) -> tuple[Implementation[S, P, R], ...]:
         return self.alternatives.implementations
 
     @property
@@ -168,6 +185,38 @@ class _BoundAlternatives(Generic[S, P, R]):
     @property
     def callable(self) -> Callable[..., R] | _TypedDescriptor[P, R]:
         return self.alternatives.callable
+
+    def pytest_parametrize(
+        self,
+        test: F | _Undefined = _UNDEFINED_VALUE,
+        *,
+        only_default: bool = False,
+    ) -> F | Callable[[F], F]:
+        """Parametrize tests with implementations bound to this receiver."""
+        return self.alternatives._pytest_parametrize(
+            test,
+            only_default=only_default,
+            instance=self.instance,
+            owner=self.owner,
+        )
+
+    def pytest_parametrize_pairs(
+        self,
+        test: F | _Undefined = _UNDEFINED_VALUE,
+        *,
+        n_cache: int | None = 0,
+        double_reference: bool = False,
+        only_default: bool = False,
+    ) -> F | Callable[[F], F]:
+        """Compare implementations bound to this receiver with a cached reference."""
+        return self.alternatives._pytest_parametrize_pairs(
+            test,
+            n_cache=n_cache,
+            double_reference=double_reference,
+            only_default=only_default,
+            instance=self.instance,
+            owner=self.owner,
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -204,7 +253,7 @@ class Alternatives(Generic[S, P, R]):
         default: bool = False,
     ):
         imp = Implementation(self, implementation, label=_maybe_get_caller_path())
-        self.reference = imp
+        self._reference = imp
         # tracks the active implementation
         self._default: Implementation[S, P, R] | None = None
         self._debug_default: str | None = None
@@ -248,6 +297,9 @@ class Alternatives(Generic[S, P, R]):
             return wrapper
 
         label = _maybe_get_caller_path()
+        if isinstance(implementation, Alternatives):
+            source = cast(Alternatives[S, P, R], implementation)
+            implementation = source.reference.implementation
         if not isinstance(implementation, Implementation):
             imp = Implementation(
                 self,
@@ -279,6 +331,11 @@ class Alternatives(Generic[S, P, R]):
         return imp
 
     @property
+    def reference(self) -> Implementation[S, P, R]:
+        """Return the immutable reference implementation."""
+        return self._reference
+
+    @property
     def callable(self) -> Callable[..., R] | _TypedDescriptor[P, R]:
         """Return the active implementation.
 
@@ -298,11 +355,12 @@ class Alternatives(Generic[S, P, R]):
         return callable_
 
     @property
-    def implementations(self) -> list[Implementation[S, P, R]]:
+    def implementations(self) -> tuple[Implementation[S, P, R], ...]:
+        """Return an immutable snapshot and prevent further registration."""
         if not self._implementations_used:
             self._implementations_used = True
             self._debug_implementations_used = _maybe_get_caller_path()
-        return self._implementations
+        return tuple(self._implementations)
 
     def __call__(self, *args: object, **kwargs: object) -> R:
         implementation: Callable[..., R] = _bind_implementation(
@@ -374,18 +432,39 @@ class Alternatives(Generic[S, P, R]):
         :param test: Test function to wrap - this is elided if using the decorator syntax.
         :parameter only_default: Only include the reference and default implementations. If False, include all implementations.
         """
+        return self._pytest_parametrize(
+            test, only_default=only_default, instance=None, owner=None
+        )
+
+    def _pytest_parametrize(
+        self,
+        test: F | _Undefined,
+        *,
+        only_default: bool,
+        instance: object | None,
+        owner: Type[object] | None,
+    ) -> F | Callable[[F], F]:
+        """Build parametrization while retaining descriptor binding context."""
         import pytest
 
         if isinstance(test, _Undefined):
 
             def decorator(f: F) -> F:
-                return cast(F, self.pytest_parametrize(f, only_default=only_default))
+                return cast(
+                    F,
+                    self._pytest_parametrize(
+                        f, only_default=only_default, instance=instance, owner=owner
+                    ),
+                )
 
             return decorator
 
-        implementations = self._select_parametrize_implementations(
-            only_default=only_default
-        )
+        implementations = [
+            _bind_test_implementation(implementation, instance, owner)
+            for implementation in self._select_parametrize_implementations(
+                only_default=only_default
+            )
+        ]
 
         @pytest.mark.parametrize("implementation", implementations)
         @wraps(test)
@@ -412,6 +491,26 @@ class Alternatives(Generic[S, P, R]):
         :parameter only_default: If True, only the default implementation will be used as the other implementation. If
             double_reference is True, the reference implementation will be included as well.
         """
+        return self._pytest_parametrize_pairs(
+            test,
+            n_cache=n_cache,
+            double_reference=double_reference,
+            only_default=only_default,
+            instance=None,
+            owner=None,
+        )
+
+    def _pytest_parametrize_pairs(
+        self,
+        test: F | _Undefined,
+        *,
+        n_cache: int | None,
+        double_reference: bool,
+        only_default: bool,
+        instance: object | None,
+        owner: Type[object] | None,
+    ) -> F | Callable[[F], F]:
+        """Build pairwise parametrization with a callable, correctly bound reference."""
         import pytest
 
         if isinstance(test, _Undefined):
@@ -419,11 +518,13 @@ class Alternatives(Generic[S, P, R]):
             def decorator(f: F) -> F:
                 return cast(
                     F,
-                    self.pytest_parametrize_pairs(
+                    self._pytest_parametrize_pairs(
                         f,
                         n_cache=n_cache,
                         double_reference=double_reference,
                         only_default=only_default,
+                        instance=instance,
+                        owner=owner,
                     ),
                 )
 
@@ -432,15 +533,20 @@ class Alternatives(Generic[S, P, R]):
         reference_implementation = cast(
             Callable[..., R],
             lru_cache(maxsize=n_cache)(
-                cast(Callable[..., R], self.reference.implementation)
+                _bind_test_implementation(
+                    self.reference.implementation, instance, owner
+                )
             ),
         )
 
-        implementations = self._select_parametrize_pairs(
-            reference_implementation=reference_implementation,
-            only_default=only_default,
-            double_reference=double_reference,
-        )
+        implementations = [
+            _bind_test_implementation(implementation, instance, owner)
+            for implementation in self._select_parametrize_pairs(
+                reference_implementation=reference_implementation,
+                only_default=only_default,
+                double_reference=double_reference,
+            )
+        ]
 
         @pytest.mark.parametrize("reference", [reference_implementation])
         @pytest.mark.parametrize("implementation", implementations)
@@ -487,7 +593,7 @@ class Alternatives(Generic[S, P, R]):
         return implementations
 
 
-@dataclasses.dataclass(unsafe_hash=True)
+@dataclasses.dataclass(frozen=True)
 class Implementation(Generic[S, P, R]):
     alternatives: Alternatives[S, P, R]
     implementation: Callable[..., R] | _TypedDescriptor[P, R]
@@ -495,7 +601,7 @@ class Implementation(Generic[S, P, R]):
 
     def __post_init__(self):
         if self.label is None:
-            self.label = _maybe_get_caller_path()
+            object.__setattr__(self, "label", _maybe_get_caller_path())
 
     def __repr__(self) -> str:
         implementation_name = getattr(

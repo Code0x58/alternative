@@ -152,11 +152,32 @@ class _BoundAlternatives(Generic[S, P, R]):
         self, *, default: bool = False
     ) -> Callable[[Callable[..., R]], Implementation[S, P, R]]: ...
     @property
-    def implementations(self) -> list[Implementation[S, P, R]]: ...
+    def implementations(self) -> tuple[Implementation[S, P, R], ...]: ...
     @property
     def reference(self) -> Implementation[S, P, R]: ...
     @property
     def callable(self) -> Callable[..., R] | _TypedDescriptor[P, R]: ...
+    @overload
+    def pytest_parametrize(self, *, only_default: bool = False) -> Callable[[F], F]: ...
+    @overload
+    def pytest_parametrize(self, test: F, *, only_default: bool = False) -> F: ...
+    @overload
+    def pytest_parametrize_pairs(
+        self,
+        *,
+        n_cache: int | None = 0,
+        double_reference: bool = False,
+        only_default: bool = False,
+    ) -> Callable[[F], F]: ...
+    @overload
+    def pytest_parametrize_pairs(
+        self,
+        test: F,
+        *,
+        n_cache: int | None = 0,
+        double_reference: bool = False,
+        only_default: bool = False,
+    ) -> F: ...
 
 class _BoundImplementation(Generic[S, P, R]):
     __match_args__: tuple[str, str, str]
@@ -232,7 +253,7 @@ class _BoundImplementation(Generic[S, P, R]):
     ) -> Callable[[Callable[..., R]], Implementation[S, P, R]]: ...
 
 class Alternatives(Generic[S, P, R]):
-    reference: Implementation[S, P, R]
+    _reference: Implementation[S, P, R]
     _default: Implementation[S, P, R] | None
     _debug_default: str | None
     _invoked: bool
@@ -272,9 +293,11 @@ class Alternatives(Generic[S, P, R]):
         self, *, default: bool = False
     ) -> Callable[[Callable[..., R]], Implementation[S, P, R]]: ...
     @property
+    def reference(self) -> Implementation[S, P, R]: ...
+    @property
     def callable(self) -> Callable[..., R] | _TypedDescriptor[P, R]: ...
     @property
-    def implementations(self) -> list[Implementation[S, P, R]]: ...
+    def implementations(self) -> tuple[Implementation[S, P, R], ...]: ...
     @overload
     def __call__(self: Alternatives[_NoReceiver, [], R]) -> R: ...
     @overload
@@ -418,7 +441,6 @@ class Implementation(Generic[S, P, R]):
     alternatives: Alternatives[S, P, R]
     implementation: Callable[..., R] | _TypedDescriptor[P, R]
     label: str | None
-
     def __init__(
         self,
         alternatives: Alternatives[S, P, R],

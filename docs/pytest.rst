@@ -116,6 +116,34 @@ The pytest helpers parametrize callables. They do not change the selected
 default implementation for each test parameter; the library still keeps the
 active implementation stable once it has been used.
 
+For class methods, access the helper through the class. The parameters bind to
+that class, including when accessed through a subclass:
+
+.. code-block:: python
+
+   class Factory:
+       marker = "base"
+
+       @alternative.reference
+       @classmethod
+       def build(cls, value: str) -> str:
+           return cls.marker + ":" + value
+
+       @build.add
+       @classmethod
+       def build_extra(cls, value: str) -> str:
+           return f"{cls.marker}:{value}"
+
+
+   @Factory.build.pytest_parametrize_pairs(n_cache=None)
+   def test_factories_are_equivalent(reference, implementation):
+       """Class method parameters already have their class receiver."""
+       assert reference("a") == implementation("a") == "base:a"
+
+Helpers accessed through an instance also bind instance methods to that
+instance. When a helper is used on a raw descriptor inside a class body, pass
+the receiver explicitly, as for the unbound instance-method example above.
+
 Collection Order
 ----------------
 
