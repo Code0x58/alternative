@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import sysconfig
 import tempfile
 import xml.etree.ElementTree as et
-
+from pathlib import Path
 
 INSPECTIONS = (
     "PyAssertTypeInspection",
@@ -172,6 +171,7 @@ def run_inspection(source: Path, inspect_sh: Path, root: Path) -> int:
             "-v0",
         ],
         env={**os.environ, "PYCHARM_VM_OPTIONS": str(vmoptions)},
+        check=False,
         capture_output=True,
         text=True,
     )

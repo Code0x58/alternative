@@ -28,7 +28,11 @@ Install the locked environment and run the same checks as CI:
 
 Unset ``PYTEST_DISABLE_PLUGIN_AUTOLOAD`` before running pytest if your shell
 defines it. Format changes with ``uv run --dev ruff format .`` before committing.
-When changing dependencies, run ``uv lock`` and commit the resulting lockfile.
+When changing dependencies, run ``uv lock --upgrade`` and commit the resulting
+lockfile. The lockfile selects the newest compatible releases for each supported
+Python version, including Sybil 9.3 on Python 3.10 and Sybil 10 on newer Python
+versions. Run the full validation suite after upgrading, since lint and type
+checker updates can require source and stub changes.
 Dependabot proposes weekly dependency and GitHub Actions updates; actions are
 pinned to full commit hashes.
 

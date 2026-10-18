@@ -1,8 +1,8 @@
 """Check that headless inspection cannot silently skip the typing probes."""
 
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -77,6 +77,7 @@ for tool in et.parse(profile).findall("inspection_tool"):
     script = Path(__file__).parent / "scripts/pycharm_type_probes.py"
     result = subprocess.run(
         [sys.executable, str(script), str(source), str(inspect_sh)],
+        check=False,
         capture_output=True,
         text=True,
     )

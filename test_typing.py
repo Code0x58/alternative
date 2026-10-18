@@ -1,10 +1,10 @@
 """Check that invalid public API calls produce useful type diagnostics."""
 
-from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -41,7 +41,7 @@ def test_invalid_typing_examples_are_rejected(
             sys.executable,
         ]
     result = subprocess.run(
-        [*command, str(probe)], cwd=root, capture_output=True, text=True
+        [*command, str(probe)], check=False, cwd=root, capture_output=True, text=True
     )
     output = result.stdout + result.stderr
     assert result.returncode == 1, output

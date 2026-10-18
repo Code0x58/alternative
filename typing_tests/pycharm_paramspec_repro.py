@@ -1,6 +1,7 @@
 """Reproduce PyCharm's ParamSpec callback inference failure without alternative."""
 
-from typing import Callable, ParamSpec, Protocol, TypeVar
+from collections.abc import Callable
+from typing import ParamSpec, Protocol, TypeVar
 
 from typing_extensions import assert_type
 

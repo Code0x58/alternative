@@ -34,8 +34,7 @@ def test_public_implementations_are_immutable(explicit_default: bool) -> None:
         ):
             with pytest.raises(FrozenInstanceError):
                 setattr(implementation, name, value)
-    with pytest.raises(AttributeError):
-        setattr(wrapped, "reference", candidate)
+    pytest.raises(AttributeError, setattr, wrapped, "reference", candidate)
     assert wrapped() == expected
 
 
@@ -43,6 +42,5 @@ def test_implementation_hash_is_stable() -> None:
     """Measurements keep usable implementation keys after attempted changes."""
     wrapped = alternative.reference(lambda: 1)
     measurements = wrapped.measure(int)
-    with pytest.raises(FrozenInstanceError):
-        setattr(wrapped.reference, "label", "changed")
+    pytest.raises(FrozenInstanceError, setattr, wrapped.reference, "label", "changed")
     assert measurements[wrapped.implementations[0]] == 1
