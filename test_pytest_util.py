@@ -73,7 +73,7 @@ def test_select_parametrize_implementations(only_default: bool):
 
 
 def test_select_parametrize_implementations_with_implicit_default():
-    """Only-default parametrization includes the wrapper when the reference default is implicit."""
+    """Only-default parametrization includes an implicitly selected reference once."""
 
     @alternative.reference
     def reference_impl():
@@ -90,10 +90,8 @@ def test_select_parametrize_implementations_with_implicit_default():
     decorated = reference_impl.pytest_parametrize(parametrized, only_default=True)
     selected = _parametrize_values(decorated, "implementation")[0]
 
-    assert selected == [
-        reference_impl.reference.implementation,
-        reference_impl.callable,
-    ]
+    assert selected == [reference_impl.reference.implementation]
+    assert reference_impl.callable is reference_impl.reference.implementation
 
 
 def test_select_parametrize_implementations_with_explicit_reference_default():
@@ -185,3 +183,35 @@ def test_pytest_parametrize_pairs_signature_and_parameters(
     assert decorated(reference_callable, default_callable, 2, y=3)
     if "extra_impl" in expected_implementations:
         assert decorated(reference_callable, extra_callable, 2, y=3)
+
+
+@pytest.mark.parametrize("explicit_default", [False, True])
+@pytest.mark.parametrize("double_reference", [False, True])
+def test_reference_default_has_one_pair(
+    explicit_default: bool, double_reference: bool
+) -> None:
+    """Reference-default pairs have the same count, IDs, and calls in both modes."""
+
+    @alternative.reference(default=explicit_default)
+    def original(value: int = 2) -> int:
+        """Return an integer unchanged."""
+        return value
+
+    @original.add
+    def unused(value: int = 2) -> int:
+        """Provide a non-default candidate that should not be selected."""
+        return value
+
+    def pair_test(reference, implementation):
+        """Check the reference-default pair."""
+        assert reference(value=3) == implementation(value=3) == 3
+
+    decorated = original.pytest_parametrize_pairs(
+        pair_test, only_default=True, double_reference=double_reference
+    )
+    reference = _parametrize_values(decorated, "reference")[0][0]
+    implementations = _parametrize_values(decorated, "implementation")[0]
+    assert len(implementations) == 1
+    assert implementations[0] is original.reference.implementation
+    assert implementations[0].__name__ == "original"
+    decorated(reference, implementations[0])

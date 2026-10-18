@@ -141,14 +141,8 @@ def _bind_test_implementation(
     owner: type[object] | None,
 ) -> Callable[..., R]:
     """Bind test parameters, or unwrap descriptors that need an explicit receiver."""
-    if owner is None:
-        descriptor = (
-            implementation.implementation
-            if isinstance(implementation, Implementation)
-            else implementation
-        )
-        if isinstance(descriptor, (classmethod, staticmethod)):
-            return cast(Callable[..., R], descriptor.__func__)
+    if owner is None and isinstance(implementation, (classmethod, staticmethod)):
+        return cast(Callable[..., R], implementation.__func__)
     return _bind_implementation(implementation, instance, owner)
 
 
@@ -399,7 +393,7 @@ class Alternatives(_CallableMetadata, Generic[S, P, R, Q]):
             if self._default:
                 callable_ = self._default.implementation
             else:
-                callable_ = self.reference
+                callable_ = self.reference.implementation
             self._callable = callable_
             # access the list of implementations to freeze them
             implementations = self.implementations
