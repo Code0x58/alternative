@@ -24,6 +24,9 @@ Install
 
 ``alternative`` supports Python 3.10 and newer.
 
+The installed package includes type stubs and a ``py.typed`` marker, so type
+checkers can use its annotations without additional configuration.
+
 A First Example
 ---------------
 
