@@ -63,6 +63,7 @@ Contents
 
    quickstart
    workflow
+   performance
    pytest
    api
    contributing
