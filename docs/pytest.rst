@@ -14,10 +14,11 @@ candidate implementation should match the reference:
 .. code-block:: python
 
    import alternative
+   from collections.abc import Iterable
 
 
    @alternative.reference
-   def total_loop(values: list[int]) -> int:
+   def total_loop(values: Iterable[int]) -> int:
        result = 0
        for value in values:
            result += value
@@ -25,7 +26,7 @@ candidate implementation should match the reference:
 
 
    @total_loop.add(default=True)
-   def total_sum(values: list[int]) -> int:
+   def total_sum(values: Iterable[int]) -> int:
        return sum(values)
 
 
@@ -59,6 +60,12 @@ Caching coroutine, generator, or async-generator reference functions raises
 each call creates a fresh awaitable or iterator. Callable instances with an
 asynchronous or generator ``__call__`` follow the same rule. For synchronous
 factories, only enable caching when their results can safely be reused.
+
+The cache belongs to the decorated test and can reuse results across input cases
+and candidate parameters. Arguments must be hashable, and the reference must be
+safe to call fewer times. Cached mutable results are shared objects: changing
+one can contaminate later comparisons. Use ``n_cache=0`` for mutation, state,
+randomness, or single-use input. See :doc:`testing-contracts` for examples.
 
 Async Tests
 -----------

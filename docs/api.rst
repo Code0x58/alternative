@@ -3,6 +3,54 @@ API Reference
 
 This page documents the public API exported by ``alternative``.
 
+Decorator
+---------
+
+.. autofunction:: alternative.reference(implementation=..., *, default=False)
+
+Alternatives
+------------
+
+.. autoclass:: alternative.Alternatives
+   :members:
+   :exclude-members: add, pytest_parametrize, pytest_parametrize_pairs
+   :special-members: __call__
+
+.. automethod:: alternative.Alternatives.add(implementation=..., *, default=False)
+
+.. automethod:: alternative.Alternatives.pytest_parametrize(test=..., *, only_default=False)
+
+.. automethod:: alternative.Alternatives.pytest_parametrize_pairs(test=..., *, n_cache=0, double_reference=False, only_default=False)
+
+The ellipsis in these signatures means the implementation or test may be omitted for
+decorator-factory syntax. It is not a value to pass to the API. Runtime
+registration does not validate signature compatibility; type checkers validate
+the public contracts described above.
+
+Implementation
+--------------
+
+.. autoclass:: alternative.Implementation
+   :members:
+   :exclude-members: add
+   :special-members: __call__
+
+.. automethod:: alternative.Implementation.add(implementation=..., *, default=False)
+
+Exceptions
+----------
+
+.. autoexception:: alternative.AlternativeError
+
+.. autoexception:: alternative.AddTooLateError
+
+.. autoexception:: alternative.MultipleDefaultsError
+
+.. autoexception:: alternative.CrossAlternativesImplementationError
+
+Typing and IDEs
+---------------
+
 The stubs preserve parameter names, defaults, keyword-only arguments, and
 return types in mypy, Pyright, and Pyrefly. Instance and class access bind method
 receivers; an ordinary function accepting ``type[T]`` still requires that argument.
@@ -48,33 +96,3 @@ inference without importing this library. Related JetBrains reports cover
 `ParamSpec matching outside Callable
 <https://youtrack.jetbrains.com/issue/PY-77541>`_ and `decorated method binding
 <https://youtrack.jetbrains.com/issue/PY-85027>`_.
-
-Decorator
----------
-
-.. autofunction:: alternative.reference
-
-Alternatives
-------------
-
-.. autoclass:: alternative.Alternatives
-   :members:
-   :special-members: __call__
-
-Implementation
---------------
-
-.. autoclass:: alternative.Implementation
-   :members:
-   :special-members: __call__
-
-Exceptions
-----------
-
-.. autoexception:: alternative.AlternativeError
-
-.. autoexception:: alternative.AddTooLateError
-
-.. autoexception:: alternative.MultipleDefaultsError
-
-.. autoexception:: alternative.CrossAlternativesImplementationError

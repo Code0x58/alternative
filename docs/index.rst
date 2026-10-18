@@ -24,6 +24,14 @@ Install
 
 ``alternative`` supports Python 3.10 and newer.
 
+The runtime has no dependencies. Install ``pytest`` to use the test helpers,
+``pytest-benchmark`` for the benchmark fixture, and ``pytest-asyncio`` when testing
+async functions:
+
+.. code-block:: console
+
+   $ pip install alternative pytest pytest-benchmark
+
 The installed package includes type stubs and a ``py.typed`` marker, so type
 checkers can use its annotations without additional configuration.
 
@@ -62,9 +70,11 @@ Contents
    :maxdepth: 2
 
    quickstart
+   tutorial
    workflow
    performance
    pytest
+   testing-contracts
    api
    contributing
 

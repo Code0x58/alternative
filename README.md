@@ -26,26 +26,25 @@ import alternative
 
 
 @alternative.reference
-def constant_number():
-    return 1
+def total(values: list[int]) -> int:
+    """Keep a straightforward implementation as the reference."""
+    result = 0
+    for value in values:
+        result += value
+    return result
 
 
-@constant_number.add(default=True)
-def alternative_constant_number():
-    return 2
+@total.add(default=True)
+def total_builtin(values: list[int]) -> int:
+    """Register a candidate with the same contract."""
+    return sum(values)
 
 
-@constant_number.add
-def unused_alternative_constant_number():
-    return 3
-
-
-# the default=True implementation is used if specified;
-# otherwise, the reference is the implicit default
-assert constant_number() == 2
-# alternative implementations still act like themselves
-assert unused_alternative_constant_number() == 3
+assert total([1, 2, 3]) == 6
+assert total_builtin([1, 2, 3]) == 6
 ```
+
+Install with `pip install alternative`; add `pytest` and `pytest-benchmark` for the testing workflow.
 
 See the [quickstart](https://alternative.readthedocs.io/en/latest/quickstart.html) for registration patterns, defaults, and method examples.
 
@@ -67,7 +66,7 @@ class Parser:
 
     @parse.add(default=True)
     def parse_fast(self, value: str) -> int:
-        return int(value)
+        return int(value.strip(), 10)
 
     @alternative.reference
     @classmethod
@@ -77,7 +76,7 @@ class Parser:
     @from_text.add(default=True)
     @classmethod
     def from_text_fast(cls, value: str) -> "Parser":
-        return cls(value)
+        return cls(value.strip())
 
     @alternative.reference
     @staticmethod
@@ -87,7 +86,7 @@ class Parser:
     @is_valid.add(default=True)
     @staticmethod
     def is_valid_fast(value: str) -> bool:
-        return value.isdigit()
+        return value.strip().isdigit()
 ```
 
 Calling through an instance or class follows normal Python binding rules, and direct implementation calls bind the same way. The full descriptor examples are in [Use Methods](https://alternative.readthedocs.io/en/latest/quickstart.html#use-methods) and [Testing Methods](https://alternative.readthedocs.io/en/latest/pytest.html#testing-methods).
@@ -109,6 +108,8 @@ Use `pytest_parametrize(...)` to run one test body across all implementations.
 
 - [Only the Default Implementation](https://alternative.readthedocs.io/en/latest/pytest.html#only-the-default-implementation)
 - [Benchmark All Implementations](https://alternative.readthedocs.io/en/latest/pytest.html#benchmark-all-implementations) with [`pytest-benchmark`](https://pypi.org/project/pytest-benchmark/)
+
+The [complete workflow](docs/tutorial.rst) includes startup imports, independent correctness tests, equivalence tests, and production benchmarks. See [testing contracts](docs/testing-contracts.rst) for mutation, exception, and cache behavior, and [call overhead](docs/performance.rst) for reproducible dispatch measurements.
 
 ## Runtime tools
 

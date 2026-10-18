@@ -31,7 +31,7 @@ html_theme_options = {
     "navigation_depth": 3,
 }
 
-autodoc_typehints = "description"
+autodoc_typehints = "none"
 autodoc_member_order = "bysource"
 autoclass_content = "both"
 
