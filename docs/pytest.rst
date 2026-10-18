@@ -70,6 +70,11 @@ default implementation:
 This is useful for expensive test suites where exhaustive coverage happens in a
 smaller equivalence test.
 
+If the reference is also the selected default, it appears only once, whether
+selected implicitly or with ``@alternative.reference(default=True)``. Pairwise
+``only_default=True`` similarly compares the reference with itself once;
+``double_reference=True`` does not duplicate that pair.
+
 Benchmark All Implementations
 -----------------------------
 
