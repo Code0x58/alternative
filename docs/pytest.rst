@@ -2,15 +2,8 @@ Pytest Integration
 ==================
 
 Use the pytest helpers to run one test body across registered implementations.
-This guide builds on :doc:`quickstart` and assumes you know basic pytest tests
-and parametrization. Install the tools used in the synchronous examples with:
-
-.. code-block:: console
-
-   $ pip install alternative pytest pytest-benchmark
-
-The code blocks below can be combined in a single test file. Register every
-candidate before applying a helper to a test function.
+The examples share ``test_totals.py`` and use the ``alternative[dev]``
+installation from :doc:`quickstart`.
 
 Equivalence Tests
 -----------------
@@ -47,15 +40,13 @@ candidate implementation should match the reference:
        values = [1, 2, 3]
        assert implementation(values) == reference(values)
 
-The helper supplies the callable arguments named ``reference`` and
-``implementation``; do not define fixtures for them. ``reference`` calls the
-reference implementation, and ``implementation`` takes each candidate in turn.
-Reference caching is disabled by default.
+The helper supplies callable ``reference`` and ``implementation`` arguments:
+``reference`` calls the reference implementation, and ``implementation`` takes
+each candidate in turn.
 
 The reference is not paired with itself unless you set ``double_reference=True``
 to check the test's own assumptions. With no candidates, ordinary pairwise
-parametrization has no cases. Keep independent expected-result tests for the
-reference as well as equivalence tests.
+parametrization has no cases.
 
 Check Expected Results
 ----------------------
@@ -76,8 +67,8 @@ This checks the reference itself, which pairwise agreement alone cannot do.
 Benchmark All Implementations
 -----------------------------
 
-Use :meth:`alternative.Alternatives.pytest_parametrize` with
-``pytest-benchmark`` to benchmark every implementation:
+The same ``.pytest_parametrize()`` helper supplies implementations to the
+``benchmark`` fixture:
 
 .. code-block:: python
 
@@ -100,9 +91,6 @@ default implementation:
    def test_selected_implementation_accepts_input(implementation):
        """The reference and default implementation both accept list input."""
        assert implementation([1, 2, 3]) == 6
-
-This is useful for expensive test suites where exhaustive coverage happens in a
-smaller equivalence test.
 
 If the reference is also the selected default, it appears only once, whether
 selected implicitly or with ``@alternative.reference(default=True)``. Pairwise
@@ -141,9 +129,8 @@ instance to the parametrized implementation:
        counter = Counter(3)
        assert implementation(counter) == reference(counter)
 
-The pytest helpers parametrize callables. They do not change the selected
-default implementation for each test parameter; the library still keeps the
-active implementation stable once it has been used.
+Parametrization supplies implementation callables without changing the selected
+default.
 
 For class methods, access the helper through the class. The parameters bind to
 that class, including when accessed through a subclass:
@@ -180,12 +167,8 @@ the receiver explicitly, as for the unbound instance-method example above.
 Async Tests
 -----------
 
-The helpers preserve ``async def`` tests for async pytest plugins. For
-``pytest-asyncio``, install the plugin and mark each async test:
-
-.. code-block:: console
-
-   $ pip install pytest-asyncio
+The helpers preserve ``async def`` tests. The ``dev`` extra includes
+``pytest-asyncio``; mark async tests with ``@pytest.mark.asyncio``:
 
 .. code-block:: python
 
@@ -208,15 +191,12 @@ The helpers preserve ``async def`` tests for async pytest plugins. For
        assert await reference(" Ada ") == await implementation(" Ada ") == "ada"
 
 ``@pytest.mark.asyncio`` can appear in either order relative to either helper.
-Leave reference caching disabled. Ordinary runtime calls also return awaitables
-for asynchronous implementations; the library does not run an event loop on the
-caller's behalf.
+Leave reference caching disabled.
 
 Reference Caching
 -----------------
 
-Use ``n_cache`` to reuse reference results across pairwise comparisons when the
-reference is expensive and its results are safe to share:
+Set ``n_cache`` to enable an ``lru_cache`` around the reference callable:
 
 .. code-block:: python
 
@@ -225,21 +205,18 @@ reference is expensive and its results are safe to share:
        """The reference result may be reused across implementations."""
        assert implementation((1, 2, 3)) == reference((1, 2, 3))
 
-The default, ``n_cache=0``, disables caching. Use a positive integer for a bounded
-cache, or ``None`` for an unbounded cache, when the reference is expensive and
-arguments are hashable.
+``n_cache=0`` (the default) disables caching; a positive integer bounds the
+cache and ``None`` leaves it unbounded.
 
 Caching coroutine, generator, or async-generator reference functions raises
 ``ValueError`` during test decoration. Keep ``n_cache=0`` for these functions so
 each call creates a fresh awaitable or iterator. Callable instances with an
-asynchronous or generator ``__call__`` follow the same rule. For synchronous
-factories, only enable caching when their results can safely be reused.
+asynchronous or generator ``__call__`` follow the same rule.
 
-The cache belongs to the decorated test and can reuse results across input cases
-and candidate parameters. Arguments must be hashable, and the reference must be
-safe to call fewer times. Cached mutable results are shared objects: changing
-one can contaminate later comparisons. Use ``n_cache=0`` for mutation, state,
-randomness, or single-use input. See :doc:`testing-contracts` for examples.
+Each decorated test owns its cache, shared across input cases and candidates.
+Arguments must be hashable, and the reference safe to call fewer times. Cached
+mutable results are shared between comparisons. Leave caching disabled for
+mutation, state, randomness, or single-use input; see :doc:`testing-contracts`.
 
 Collection Order
 ----------------
@@ -250,6 +227,3 @@ before test execution. Import all candidates before these decorators run.
 Reading ``.implementations`` or ``.callable``, calling the alternatives object,
 or calling ``.measure()`` also freezes registration. Further additions raise
 :class:`alternative.AddTooLateError`.
-
-That rule is deliberate. It prevents a test module from collecting a partial
-implementation list and then silently missing an implementation imported later.

@@ -1,15 +1,8 @@
 An Optimization Workflow
 ========================
 
-This complete example keeps a reference, candidates, startup imports, correctness
-tests, and benchmarks in separate files. Its contract is to sum an iterable of
-integers, including empty inputs and large integers, without changing its items.
-
-After :doc:`quickstart`, use this layout when implementations and tests need
-separate modules. Create an ``optimise_totals/`` directory containing the four
-files below. You can also copy the `example directory from the source repository
-<https://github.com/Code0x58/alternative/tree/master/docs/examples/optimise_totals>`_.
-Each file is shown below, so a repository checkout is optional.
+The ``optimise_totals`` example sums integer iterables without changing their
+items. It separates the reference, candidates, startup imports, and tests:
 
 .. code-block:: text
 
@@ -19,30 +12,32 @@ Each file is shown below, so a repository checkout is optional.
        candidates.py
        test_totals.py
 
+The `example directory
+<https://github.com/Code0x58/alternative/tree/master/docs/examples/optimise_totals>`_
+contains all four files.
+
 Reference and Candidate
 -----------------------
 
-``reference.py`` contains the implementation that remains the correctness oracle:
-
 .. literalinclude:: examples/optimise_totals/reference.py
    :language: python
-
-``candidates.py`` registers the rewrite and selects it as the default:
+   :caption: optimise_totals/reference.py
 
 .. literalinclude:: examples/optimise_totals/candidates.py
    :language: python
+   :caption: optimise_totals/candidates.py
 
-Choose ``default=True`` after testing representative inputs and reviewing the
-benchmark results for your environment. It is shown here to demonstrate the final
-configuration, rather than assert a universal speed advantage for every input.
+``default=True`` selects the candidate for application calls; the reference
+remains available for equivalence tests.
 
 Startup Imports
 ---------------
 
-The package's ``__init__.py`` imports candidates before exposing the entry point:
+Import candidates before exposing the entry point:
 
 .. literalinclude:: examples/optimise_totals/__init__.py
    :language: python
+   :caption: optimise_totals/__init__.py
 
 Application code can now use ``from optimise_totals import total``. Importing
 the package registers the candidates; import alone does not freeze registration.
@@ -59,16 +54,15 @@ Separate benchmark tests measure algorithms and the production entry point:
 
 .. literalinclude:: examples/optimise_totals/test_totals.py
    :language: python
+   :caption: optimise_totals/test_totals.py
 
-From the directory containing ``optimise_totals/``, install the library and test
-tools, then run the tests:
+From the parent directory of ``optimise_totals/``:
 
 .. code-block:: console
 
-   $ pip install alternative pytest pytest-benchmark
-   $ pytest optimise_totals
+   $ pip install "alternative[dev]"
+   $ pytest optimise_totals/test_totals.py
 
 To promote a different candidate, move ``default=True`` to its registration in
-source and rerun a fresh process. Collection and measurement already freeze the
-current registry; they do not change its default. See :doc:`performance` for
-dispatch costs and :doc:`testing-contracts` for mutations and errors.
+source and start a fresh process. See :doc:`performance` for dispatch costs and
+:doc:`testing-contracts` for mutations and errors.

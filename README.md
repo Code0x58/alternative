@@ -9,12 +9,14 @@ Use it when optimizing an existing function or comparing algorithms with the sam
 ## Install
 
 ```console
-pip install alternative pytest pytest-benchmark
+pip install "alternative[dev]"
 ```
 
-Only `alternative` is needed at runtime. The other packages provide the testing and timing tools used below.
+For runtime-only installations, use `pip install alternative`.
 
 ## Register and call implementations
+
+In `test_totals.py`:
 
 ```python
 import alternative
@@ -43,8 +45,6 @@ assert total_builtin([1, 2, 3]) == 6
 
 ## Test and benchmark
 
-In the same file, or in a test module that imports `total`, add:
-
 ```python
 import pytest
 
@@ -69,11 +69,15 @@ def test_total_benchmark(benchmark, implementation):
     assert benchmark(implementation, list(range(1_000))) == 499_500
 ```
 
-Save the combined example as `test_totals.py` and run `pytest test_totals.py`. The helpers supply `implementation` and `reference`; they are callable test parameters, not fixtures you need to write.
+The helpers supply callable `implementation` and `reference` parameters.
 
-After checking correctness and measuring representative inputs, edit the candidate registration to `@total.add(default=True)` and run a fresh process. Normal calls to `total(...)` will then use that candidate. The library does not choose a winner automatically.
+```console
+pytest test_totals.py
+```
 
-Register every candidate before calling the alternatives object or applying a pytest helper. Those operations freeze registration, as do reading `.callable` or `.implementations` and calling `.measure(...)`. This prevents collected tests from silently missing later imports. Set `ALTERNATIVE_DEBUG=1` to include the earlier registration or inspection location in relevant errors.
+Set `@total.add(default=True)` to use the candidate for normal `total(...)` calls on the next run.
+
+Register candidates before calling the alternatives object, applying a pytest helper, reading `.callable` or `.implementations`, or calling `.measure(...)`: each freezes registration. Set `ALTERNATIVE_DEBUG=1` to include the earlier registration or inspection location in relevant errors.
 
 ## Next steps
 

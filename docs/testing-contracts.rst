@@ -1,19 +1,15 @@
 Testing Observable Behavior
 ===========================
 
-Equivalence is the contract your tests define. Besides return values, consider
-exceptions, input mutation, receiver state, ordering, and numerical tolerances.
-Use independent expected results to check the reference itself, as in
-:doc:`tutorial`; agreement alone does not prove either implementation correct.
+Equivalence can include exceptions, input mutation, receiver state, ordering,
+and numerical tolerances.
 
 Fresh Inputs for Mutating Functions
 -----------------------------------
 
-Both implementations receive the same argument objects if you pass them the
-same objects. Neither pytest parametrization nor ``measure()`` copies inputs.
-Create independent inputs and compare the resulting state as well as the return
-values. Use fresh instances for stateful methods, and fresh iterators for
-single-use iterable inputs.
+Neither parametrization nor ``measure()`` copies inputs. Use independent inputs
+when comparing mutating implementations, fresh instances for stateful methods,
+and fresh iterators for single-use inputs.
 
 .. code-block:: python
 
@@ -53,8 +49,8 @@ caching mutable results can cause one test case to change another case's oracle.
 Exceptions Are Part of the Contract
 -----------------------------------
 
-Check success and failure cases separately. Compare exception classes and only
-compare messages when the API promises their exact wording:
+Compare exception classes, and compare messages only when their wording is part
+of the API contract:
 
 .. code-block:: python
 
@@ -90,11 +86,9 @@ compare messages when the API promises their exact wording:
 Numerical Comparisons
 ---------------------
 
-Choose absolute and relative tolerances from the application's error budget and
-input domain, then compare using ``pytest.approx``. Decide explicitly how to
-handle NaN, infinity, overflow, signed zero, and empty inputs. A tolerance should
-not hide a semantic difference such as changed ordering, precision, or exception
-behavior. Include cancellation and extreme-value cases relevant to the domain.
+Choose ``pytest.approx`` tolerances from your application's error budget.
+Cover boundary values relevant to its domain, including cancellation, overflow,
+NaN, infinity, signed zero, and empty inputs.
 
 For example, these vector-length implementations use different floating-point
 operations. The test chooses a relative tolerance of ``1e-12`` and an absolute
@@ -129,10 +123,8 @@ tolerance of ``1e-15`` for small, finite vectors:
            reference_result, rel=1e-12, abs=1e-15
        )
 
-These example tolerances are not a general recommendation. For very large
-components, squaring can overflow while ``hypot`` still returns a finite length.
-If that input range is part of your API, the implementations need an explicit
-contract for it and tests beyond the small vectors above.
+Squaring can overflow for large components where ``hypot`` remains finite.
+If such inputs are supported, extend the contract and tests accordingly.
 
 Different but Valid Outputs
 ---------------------------

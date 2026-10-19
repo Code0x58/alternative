@@ -1,8 +1,6 @@
 API Reference
 =============
 
-This page documents the public API exported by ``alternative``.
-
 .. py:module:: alternative
 
 Decorator
@@ -24,10 +22,8 @@ Alternatives
 
 .. automethod:: alternative.Alternatives.pytest_parametrize_pairs(test=..., *, n_cache=0, double_reference=False, only_default=False)
 
-The ellipsis in these signatures means the implementation or test may be omitted for
-decorator-factory syntax. It is not a value to pass to the API. Runtime
-registration does not validate signature compatibility; type checkers validate
-the registration contracts in :ref:`typing-and-ides`.
+The ellipsis indicates an optional implementation or test argument for
+decorator-factory syntax.
 
 Implementation
 --------------
@@ -58,8 +54,7 @@ Typing and IDEs
 Decorated functions keep their declared parameter and return types, including
 parameter names, defaults, and keyword-only arguments. You can register
 candidates and select a default in registration code while callers keep the
-same typed interface and code completion. Keep using ordinary function
-annotations.
+same typed interface and code completion.
 
 Candidates must accept all calls permitted by the reference and return a
 compatible type. Mypy, Pyright, and Pyrefly check these requirements; runtime
