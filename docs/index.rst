@@ -87,6 +87,7 @@ Contents
    :maxdepth: 2
    :caption: Guides
 
+   applications
    pytest
    testing-contracts
    workflow

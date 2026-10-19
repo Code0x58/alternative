@@ -79,6 +79,7 @@ Register every candidate before calling the alternatives object or applying a py
 
 - [Quickstart](https://alternative.readthedocs.io/en/latest/quickstart.html): register, test, benchmark, and select a default.
 - [Complete workflow](https://alternative.readthedocs.io/en/latest/tutorial.html): separate implementation, startup, and test files.
+- [Potential applications](https://alternative.readthedocs.io/en/latest/applications.html): benchmarked matrix identities, agent-assisted optimisation, and circuit search.
 - [Pytest integration](https://alternative.readthedocs.io/en/latest/pytest.html) and [testing contracts](https://alternative.readthedocs.io/en/latest/testing-contracts.html): expected results, mutation, exceptions, async tests, and reference caching.
 - [Methods](https://alternative.readthedocs.io/en/latest/methods.html): instance, class, and static methods and decorator order.
 - [Runtime workflow](https://alternative.readthedocs.io/en/latest/workflow.html): registration rules, debugging, and scoring returned results with `.measure(...)`.
