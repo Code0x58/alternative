@@ -161,7 +161,7 @@ Benchmark the Actual Algorithms
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The benchmark includes matrix construction and domain validation on every call.
-It uses the same angles and seven repetitions for all implementations. BLAS runs
+At each size, all implementations use the same angles and seven layer repetitions. BLAS runs
 on one thread, with one warmup and nine measured rounds of ten calls per case.
 A separate production benchmark includes dispatch through the selected default:
 

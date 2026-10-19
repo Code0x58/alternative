@@ -30,6 +30,9 @@ demo = [
     { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "pytest" },
     { name = "pytest-benchmark" },
+    { name = "pytest-cov" },
+    { name = "sybil", version = "9.3.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "sybil", version = "10.1.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "threadpoolctl" },
 ]
 dev = [
@@ -70,7 +73,9 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.2.0" },
     { name = "pytest-benchmark", marker = "extra == 'demo'", specifier = ">=5.1.0" },
     { name = "pytest-benchmark", marker = "extra == 'dev'", specifier = ">=5.1.0" },
+    { name = "pytest-cov", marker = "extra == 'demo'", specifier = ">=6.1.1" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.1.1" },
+    { name = "sybil", marker = "extra == 'demo'", specifier = ">=9.3.0" },
     { name = "sybil", marker = "extra == 'dev'", specifier = ">=9.3.0" },
     { name = "threadpoolctl", marker = "extra == 'demo'", specifier = ">=3.5" },
 ]

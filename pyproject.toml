@@ -39,6 +39,8 @@ demo = [
     "numpy>=1.26",
     "pytest>=8.3.5",
     "pytest-benchmark>=5.1.0",
+    "pytest-cov>=6.1.1",
+    "sybil>=9.3.0",
     "threadpoolctl>=3.5",
 ]
 dev = [
