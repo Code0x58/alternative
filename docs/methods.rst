@@ -2,8 +2,7 @@ Methods and Descriptors
 =======================
 
 Use the same registration and selection workflow for instance, class, and static
-methods. This page assumes you have followed :doc:`quickstart`; the examples
-illustrate binding, rather than claim a speed improvement.
+methods.
 
 Decorator Order
 ---------------
@@ -71,9 +70,8 @@ Adding a plain function to a static-method reference preserves static binding:
 
    registered = Parser.is_valid.add(accepts_digits, default=True)
 
-Register imported candidates before calling or inspecting the alternatives set.
-``default=True`` selects this candidate for normal calls to ``Parser.is_valid``.
-Registration happens before any of the calls below.
+``default=True`` selects ``accepts_digits`` for normal calls to
+``Parser.is_valid(...)``.
 
 Call Through a Class or Instance
 --------------------------------

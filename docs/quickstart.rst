@@ -1,21 +1,15 @@
 Quickstart
 ==========
 
-This guide assumes you know Python decorators and basic pytest tests. It uses a
-name-formatting function to show the full cycle: register a candidate, check its
-contract, benchmark it, and select the default used by application code.
-
-Install the library and test tools:
-
 .. code-block:: console
 
-   $ pip install alternative pytest pytest-benchmark
+   $ pip install "alternative[dev]"
 
 Register Implementations
 ------------------------
 
-Save the following in ``test_names.py``. Use :func:`alternative.reference` on the
-implementation you trust most, then register a candidate with ``.add``:
+In ``test_names.py``, register a reference with :func:`alternative.reference` and
+a candidate with ``.add``:
 
 .. code-block:: python
 
@@ -34,16 +28,15 @@ implementation you trust most, then register a candidate with ``.add``:
        """Apply the same word transformation with map."""
        return " ".join(map(str.capitalize, name.split()))
 
-``normalise_name`` is an :class:`alternative.Alternatives` object. Calling it
-uses the reference unless you select another default. ``normalise_name_mapped``
-is an :class:`alternative.Implementation` object; calling it always runs that
-candidate directly. Both retain their Python call signatures.
+``normalise_name(...)`` calls the reference until another default is selected.
+``normalise_name_mapped(...)`` calls the candidate directly.
 
 Test the Contract
 -----------------
 
-Add expected results to check every implementation, including the reference.
-Then compare candidates against the reference on the same inputs:
+Append the tests to ``test_names.py``. ``.pytest_parametrize()`` supplies every
+implementation, including the reference; ``.pytest_parametrize_pairs()`` pairs
+each candidate with the reference:
 
 .. code-block:: python
 
@@ -68,21 +61,14 @@ Then compare candidates against the reference on the same inputs:
        """Compare each candidate with the reference."""
        assert implementation(value) == reference(value)
 
-The helpers supply the callable parameters named ``implementation`` and
-``reference``. You do not need to define fixtures with these names. Run the tests:
-
-.. code-block:: console
-
-   $ pytest test_names.py
-
-The contract here includes whitespace normalization and apostrophe handling.
-Using ``name.title()`` would change those rules. Agreement with the reference
-also needs independent expected results: two implementations can share a bug.
+The helpers supply callable ``implementation`` and ``reference`` parameters.
+The expected results specify whitespace and apostrophe handling;
+``name.title()`` would change those results.
 
 Benchmark Representative Inputs
 -------------------------------
 
-Add a benchmark using the ``benchmark`` fixture from ``pytest-benchmark``:
+The ``benchmark`` fixture times each parametrized implementation:
 
 .. code-block:: python
 
@@ -91,40 +77,31 @@ Add a benchmark using the ``benchmark`` fixture from ``pytest-benchmark``:
        """Time each algorithm on the same name."""
        assert benchmark(implementation, "  ada   lovelace  ") == "Ada Lovelace"
 
-Run ``pytest test_names.py`` again to see timing results for both implementations.
-Try inputs representative of your application before deciding that a candidate
-is faster. The helper times underlying implementations; also time the decorated
-entry point to account for dispatch cost, as shown in :doc:`tutorial` and
-:doc:`performance`.
+.. code-block:: console
+
+   $ pytest test_names.py
+
+These timings exclude dispatch through the alternatives object. See
+:doc:`performance` for benchmarking the application entry point.
 
 Choose a Default
 ----------------
 
-After reviewing correctness and timing results, edit the candidate's decorator
-in ``test_names.py`` to ``@normalise_name.add(default=True)`` and run a fresh
-process. Calls such as ``normalise_name("ada lovelace")`` will then use that
-candidate. Direct calls to ``normalise_name_mapped`` still use the candidate.
+Change the candidate's decorator in ``test_names.py`` to
+``@normalise_name.add(default=True)`` for normal calls to use it on the next run.
 
 Only one explicit default can be registered, including an explicitly selected
-reference. The library does not choose the fastest implementation automatically.
+reference.
 
 Register all candidates before applying test decorators, calling the alternatives
 object, reading ``.callable`` or ``.implementations``, or calling ``.measure()``.
-Each operation freezes registration. Choosing the default is a source change
-made before those operations in the next run, rather than an update to the
-already tested alternatives object.
-
-Use Methods
------------
-
-The same workflow supports instance, class, and static methods. See :doc:`methods`
-for decorator order, receiver binding, and imported static candidates.
+Each operation freezes registration, so select the default before them.
 
 Next Steps
 ----------
 
 See :doc:`tutorial` to split this workflow across application and test files.
 Use :doc:`pytest` for helper options and :doc:`testing-contracts` for mutation
-and errors.
+and errors. :doc:`methods` covers instance, class, and static methods.
 :doc:`workflow` covers direct-call registration, chained registration, and runtime
 inspection.

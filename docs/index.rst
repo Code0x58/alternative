@@ -11,32 +11,24 @@ It is designed for a common optimisation workflow:
 * run equivalence tests across every implementation;
 * select the implementation that normal callers should use.
 
-The library keeps those choices explicit. The selected implementation cannot be
-changed after it has been used, and the implementation list cannot be extended
-after it has been inspected by test helpers.
-
 Install
 -------
+
+Python 3.10 or newer:
 
 .. code-block:: console
 
    $ pip install alternative
 
-``alternative`` supports Python 3.10 and newer.
-
-The runtime has no dependencies. Install ``pytest`` to use the test helpers
-and ``pytest-benchmark`` for the benchmark fixture:
+For the tests and benchmarks in these guides:
 
 .. code-block:: console
 
-   $ pip install alternative pytest pytest-benchmark
+   $ pip install "alternative[dev]"
 
-For async tests, also install ``pytest-asyncio`` or another async pytest plugin;
-see :ref:`async-tests`.
-
-Decorated functions retain their typed call signatures and return types, so
-callers keep normal type checking and code completion while you register and
-select implementations. No extra typing configuration is needed.
+The ``dev`` extra includes pytest and its benchmark and async plugins.
+Decorated functions retain their typed call signatures for type checking and
+code completion.
 
 A First Example
 ---------------
@@ -64,10 +56,8 @@ A First Example
    assert total([1, 2, 3]) == 6
    assert total_builtin([1, 2, 3]) == 6
 
-Calling ``total`` uses the selected default implementation. Calling
-``total_builtin`` directly still calls that implementation by itself, which is
-useful in tests and benchmarks. This shows a selected default; choose it after
-checking correctness and measuring representative inputs.
+``total(...)`` calls the selected default; ``total_builtin(...)`` calls the
+candidate directly.
 
 Start with :doc:`quickstart` to add tests and benchmarks. If your implementations
 live in separate modules, follow :doc:`tutorial` for startup imports and a

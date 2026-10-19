@@ -1,24 +1,6 @@
 Runtime Workflow
 ================
 
-This guide explains registration and selection after the examples in
-:doc:`quickstart` and :doc:`tutorial`. Implementation choice stays explicit in
-registration code, so reviewers can see which candidate application calls use.
-
-When to Use It
---------------
-
-Use ``alternative`` when you have:
-
-* one implementation you trust as correct;
-* one or more implementations you want to compare against it;
-* tests or benchmarks that should exercise every implementation;
-* a single implementation that production callers should use.
-
-It is not a plugin system. Implementations should usually have the same
-signature and the same observable behaviour unless you are deliberately
-measuring or comparing different outputs.
-
 Selection Lifecycle
 -------------------
 
@@ -29,13 +11,7 @@ Selection Lifecycle
 4. Use test and benchmark results to change the selection in source, then run a
    fresh process to validate that choice.
 
-Calling the alternatives object or ``measure()``, applying either pytest helper
-to a test function, and reading ``callable`` or ``implementations`` all freeze the
-set. Test decorators usually run while pytest imports test modules for
-collection. You cannot measure candidates and then register the winner as a
-default in that same set. Selecting a default from startup configuration is
-possible if it is read before any of these operations. See :doc:`tutorial` for
-a complete package split across files.
+See :doc:`tutorial` for startup imports and tests split across files.
 
 .. _measure-implementations:
 
@@ -89,25 +65,17 @@ in :doc:`testing-contracts`. For receiver binding, see :doc:`methods`. Use
 Safety Rules
 ------------
 
-The library intentionally freezes registration after either of these events:
-
-* the alternatives object is called;
-* the implementations list is inspected.
-
-These rules also apply when Python runs with ``-O`` or ``PYTHONOPTIMIZE``.
+Calling the alternatives object or ``.measure()``, applying a pytest helper,
+or reading ``.callable`` or ``.implementations`` freezes registration, including
+under ``-O`` or ``PYTHONOPTIMIZE``. Read any startup configuration that determines
+the default before these operations.
 
 ``.implementations`` returns a tuple, and each ``Implementation`` is immutable.
 The ``.reference`` property is read-only. Register candidates with ``.add(...)``
 before inspecting or invoking the alternatives set.
 
-``.callable`` returns the underlying selected implementation in both the implicit
-reference-default and explicit-default cases. Reading it also freezes
-registration.
-
-This protects test runs from covering only the implementations that happened to
-be imported before collection. It also prevents runtime callers from changing
-the active implementation after part of the process has already used a previous
-choice.
+``.callable`` returns the underlying selected implementation, including when the
+reference is the implicit default.
 
 The relevant exceptions are:
 
@@ -208,5 +176,5 @@ callers use them; broader parameter types and additional optional arguments are
 allowed. Your callers retain the reference's typed interface when you change
 which implementation they use.
 
-Run a type checker to catch incompatible candidates; runtime registration does
-not validate signatures. See :ref:`typing-and-ides` for typing and IDE support.
+Type checkers validate candidate signatures; runtime registration does not.
+See :ref:`typing-and-ides` for typing and IDE support.
