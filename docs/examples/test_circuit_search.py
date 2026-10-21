@@ -22,8 +22,8 @@ creator.create("CircuitDemoIndividual", list, fitness=creator.CircuitDemoFitness
 
 
 def reference_program() -> tuple[int, ...]:
-    """Express X as H Z H, followed by two empty gate slots."""
-    return (1, 2, 1, 0, 0)
+    """Express X as the readable identity H Z H."""
+    return (1, 2, 1)
 
 
 def fitness(program) -> tuple[float, float]:
@@ -33,7 +33,8 @@ def fitness(program) -> tuple[float, float]:
             raise ValueError("invalid genome")
         circuit = QuantumCircuit(1)
         for gene in program:
-            circuit.append(GATES[gene], [0])
+            if gene:
+                circuit.append(GATES[gene], [0])
         error = float(np.linalg.norm(Operator(circuit).data - TARGET))
     except (ValueError, QiskitError):
         return inf, inf
@@ -57,7 +58,7 @@ def evolve(*, seed: int = 7, generations: int = 30):
     toolbox.register("select", tools.selBest)
     individual = creator.CircuitDemoIndividual
     population = [individual(random.choices(range(4), k=5)) for _ in range(63)]
-    population.append(individual(reference))
+    population.append(individual((*reference, 0, 0)))
     population, _ = algorithms.eaMuPlusLambda(
         population,
         toolbox,
@@ -68,7 +69,7 @@ def evolve(*, seed: int = 7, generations: int = 30):
         ngen=generations,
         verbose=False,
     )
-    winner = tuple(tools.selBest(population, 1)[0])
+    winner = tuple(gene for gene in tools.selBest(population, 1)[0] if gene)
     comparison = alternative.reference(reference_program)
 
     @comparison.add
@@ -79,16 +80,38 @@ def evolve(*, seed: int = 7, generations: int = 30):
     return comparison
 
 
+circuits = evolve()  # Register all finalists before pytest collection freezes the set.
+
+
+@circuits.pytest_parametrize()
+def test_circuit_correctness(implementation) -> None:
+    """Check the whole unitary of every registered circuit against X."""
+    assert fitness(implementation())[0] == 0
+
+
+def test_gate_costs() -> None:
+    """Rank finalists by gate count while normal calls retain the reference."""
+    costs = circuits.measure(len)
+    assert 1 <= min(costs.values()) <= max(costs.values()) == 3
+    assert circuits() == reference_program()
+
+
+@circuits.pytest_parametrize()
+@pytest.mark.benchmark(group="circuit_simulation")
+def test_benchmark(benchmark, implementation) -> None:
+    """Time construction and Qiskit evaluation for each registered circuit."""
+    assert benchmark(lambda: fitness(implementation()))[0] == 0
+
+
 @given(prefix=st.lists(st.integers(1, 3), max_size=2))
 def test_cancelled_gate_words(prefix: list[int]) -> None:
     """All available nonidentity gates are self-inverse, even when noncommuting."""
     assert fitness(prefix + prefix[::-1] + [3]) == (0, 2 * len(prefix) + 1)
 
 
-@pytest.mark.parametrize("generations", [0, 5])
-def test_search_and_registration(generations: int) -> None:
-    """Evolution retains a valid incumbent and registration preserves the default."""
-    comparison = evolve(generations=generations)
+def test_reference_fallback() -> None:
+    """The seeded reference remains valid even with no search generations."""
+    comparison = evolve(generations=0)
     assert comparison() == reference_program()
     costs = list(comparison.measure(lambda program: fitness(program)[1]).values())
     assert 1 <= min(costs) <= max(costs) == 3
@@ -101,5 +124,5 @@ def test_invalid_candidates(program: tuple[int, ...]) -> None:
 
 
 if __name__ == "__main__":
-    for implementation, cost in evolve().measure(lambda p: fitness(p)[1]).items():
+    for implementation, cost in circuits.measure(len).items():
         print(cost, [GATES[gene].name for gene in implementation() if gene])

@@ -1,5 +1,5 @@
-Potential Applications
-======================
+Example applications
+====================
 
 Keep a readable reference while a human, an LLM agent, or an automated search
 proposes better implementations. These independent examples show two approaches:
@@ -16,6 +16,9 @@ optional dependencies with:
 .. code-block:: console
 
    $ pip install -e '.[demo]'
+
+Both use ``alternative`` to parametrise tests and benchmarks over the registered
+implementations, and ``.measure()`` to score their returned results.
 
 The same pattern suits encoders that minimise output size or query planners
 that minimise execution cost. Define correctness before comparing costs;

@@ -56,6 +56,14 @@ def test_equivalent_traces(reference, implementation, values, power) -> None:
     )
 
 
+def test_measure_error() -> None:
+    """Score every returned trace by its error against an independent answer."""
+    errors = circulant_trace.measure(
+        lambda trace: abs(trace - 0.75**4), (0.25, 0.25, 0.25), 4
+    )
+    assert max(errors.values()) < 1e-10
+
+
 @circulant_trace.pytest_parametrize()
 @pytest.mark.parametrize("size", [64, 256, 512])
 @pytest.mark.benchmark(group="circulant_trace")

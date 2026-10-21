@@ -8,7 +8,7 @@ keep the problem small, with identity slots excluded from gate count.
 
 .. literalinclude:: examples/test_circuit_search.py
    :language: python
-   :end-before: @given
+   :end-before: @circuits.pytest_parametrize()
 
 Fitness minimises unitary error first, then correct circuits' gate count.
 Every correct circuit beats every incorrect one; error distance guides the
@@ -23,8 +23,21 @@ offspring. After searching, ``evolve`` registers its frozen winner in a fresh
 alternatives set. Normal calls still use the reference; review the result before
 selecting a new default. A bounded search need not find an optimum.
 
-Run It
--------
+Test, Score, and Benchmark the Finalists
+----------------------------------------
+
+``alternative`` supplies every registered implementation to the same correctness
+test, and ``.measure(len)`` ranks the returned circuits by gate count:
+
+.. literalinclude:: examples/test_circuit_search.py
+   :language: python
+   :start-at: @circuits.pytest_parametrize()
+   :end-before: @given
+
+The shared benchmark includes circuit construction and Qiskit evaluation.
+Evolution runs once before registration and pytest parametrisation, outside
+timed calls. Scoring keeps the reference default unchanged; ``.measure()``
+compares output costs, while ``pytest-benchmark`` measures elapsed time.
 
 With the :doc:`demo dependencies <applications>` installed:
 

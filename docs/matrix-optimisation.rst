@@ -1,5 +1,5 @@
-Matrix Optimisation with Cyclic Symmetry
-========================================
+NumPy optimisation
+==================
 
 Cyclic symmetry can turn a dense matrix calculation into one FFT. Consider
 :math:`\operatorname{tr}(C^p)` for a **circulant matrix**: every column is a cyclic
@@ -29,8 +29,29 @@ This is the same Fourier-space structure used in
 <https://docs.scipy.org/doc/scipy/reference/generated/scipy.linalg.solve_circulant.html>`_.
 Real coefficients give conjugate-paired eigenvalues, so the trace is real.
 
-Run the Tests and Benchmark
-----------------------------
+Compare with Alternative
+--------------------------
+
+``pytest_parametrize_pairs()`` supplies the reference and each candidate to the
+same generated equivalence test:
+
+.. literalinclude:: examples/test_circulant.py
+   :language: python
+   :pyobject: test_equivalent_traces
+
+``.measure()`` scores returned values. Here the score is numerical error against
+an independent answer; smaller is better:
+
+.. literalinclude:: examples/test_circulant.py
+   :language: python
+   :pyobject: test_measure_error
+
+For elapsed time, ``pytest_parametrize()`` runs a shared benchmark against every
+registered implementation:
+
+.. literalinclude:: examples/test_circulant.py
+   :language: python
+   :pyobject: test_benchmark
 
 With the :doc:`demo dependencies <applications>` installed:
 
