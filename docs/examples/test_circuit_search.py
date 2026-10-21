@@ -5,7 +5,7 @@ from math import inf
 
 import numpy as np
 import pytest
-from deap import algorithms, base, tools
+from deap import algorithms, base, creator, tools
 from hypothesis import given
 from hypothesis import strategies as st
 from qiskit.circuit import QuantumCircuit
@@ -17,10 +17,11 @@ import alternative
 
 GATES = (IGate(), HGate(), ZGate(), XGate())
 TARGET = np.array([[0, 1], [1, 0]], dtype=np.complex128)
+creator.create("CircuitDemoFitness", base.Fitness, weights=(-1.0, -1.0))
+creator.create("CircuitDemoIndividual", list, fitness=creator.CircuitDemoFitness)
 
 
-@alternative.reference
-def synthesise_x() -> tuple[int, ...]:
+def reference_program() -> tuple[int, ...]:
     """Express X as H Z H, followed by two empty gate slots."""
     return (1, 2, 1, 0, 0)
 
@@ -38,31 +39,14 @@ def fitness(program) -> tuple[float, float]:
         return inf, inf
     if not np.isfinite(error):
         return inf, inf
-    return (
-        (0.0, float(sum(gene != 0 for gene in program)))
-        if error <= 1e-12
-        else (error, inf)
-    )
+    if error > 1e-12:
+        return error, inf
+    return 0.0, float(sum(gene != 0 for gene in program))
 
 
-class CircuitFitness(base.Fitness):
-    """Keep correctness ahead of cost with lexicographic minimisation."""
-
-    weights = (-1.0, -1.0)
-
-
-class Individual(list[int]):
-    """Give each DEAP genome its own fitness record."""
-
-    def __init__(self, genes) -> None:
-        """Initialise a five-slot gate sequence."""
-        super().__init__(genes)
-        self.fitness = CircuitFitness()
-
-
-def evolve(*, seed: int = 7, generations: int = 30) -> tuple[int, ...]:
-    """Run a small, sequential DEAP search with the valid reference as fallback."""
-    reference = synthesise_x.reference()
+def evolve(*, seed: int = 7, generations: int = 30):
+    """Evolve a circuit, then register the winner alongside the readable reference."""
+    reference = reference_program()
     if fitness(reference)[0] != 0:
         raise ValueError("invalid reference")
     random.seed(seed)
@@ -71,10 +55,10 @@ def evolve(*, seed: int = 7, generations: int = 30) -> tuple[int, ...]:
     toolbox.register("mate", tools.cxTwoPoint)
     toolbox.register("mutate", tools.mutUniformInt, low=0, up=3, indpb=0.2)
     toolbox.register("select", tools.selBest)
-    population = [Individual(random.choices(range(4), k=5)) for _ in range(63)]
-    population.append(Individual(reference))
-    winners = tools.HallOfFame(1)
-    algorithms.eaMuPlusLambda(
+    individual = creator.CircuitDemoIndividual
+    population = [individual(random.choices(range(4), k=5)) for _ in range(63)]
+    population.append(individual(reference))
+    population, _ = algorithms.eaMuPlusLambda(
         population,
         toolbox,
         mu=64,
@@ -82,22 +66,15 @@ def evolve(*, seed: int = 7, generations: int = 30) -> tuple[int, ...]:
         cxpb=0.5,
         mutpb=0.5,
         ngen=generations,
-        halloffame=winners,
         verbose=False,
     )
-    return tuple(winners[0])
-
-
-def compare_winner(program: tuple[int, ...]):
-    """Register a completed finalist in a fresh set, retaining the reference default."""
-    if fitness(program)[0] != 0:
-        raise ValueError("invalid winner")
-    comparison = alternative.reference(synthesise_x.reference.implementation)
+    winner = tuple(tools.selBest(population, 1)[0])
+    comparison = alternative.reference(reference_program)
 
     @comparison.add
     def evolved_x() -> tuple[int, ...]:
         """Return the frozen search result."""
-        return program
+        return winner
 
     return comparison
 
@@ -108,28 +85,21 @@ def test_cancelled_gate_words(prefix: list[int]) -> None:
     assert fitness(prefix + prefix[::-1] + [3]) == (0, 2 * len(prefix) + 1)
 
 
-def test_search_and_registration() -> None:
+@pytest.mark.parametrize("generations", [0, 5])
+def test_search_and_registration(generations: int) -> None:
     """Evolution retains a valid incumbent and registration preserves the default."""
-    winner = evolve(generations=5)
-    assert fitness(winner)[0] == 0
-    assert fitness(winner)[1] <= 3
-    comparison = compare_winner(winner)
-    assert comparison() == synthesise_x.reference()
-    assert all(
-        np.isfinite(cost)
-        for cost in comparison.measure(lambda p: fitness(p)[1]).values()
-    )
+    comparison = evolve(generations=generations)
+    assert comparison() == reference_program()
+    costs = list(comparison.measure(lambda program: fitness(program)[1]).values())
+    assert 1 <= min(costs) <= max(costs) == 3
 
 
 @pytest.mark.parametrize("program", [(), (2, 3, 2), (4,), (3,) * 6])
 def test_invalid_candidates(program: tuple[int, ...]) -> None:
     """Wrong action, global minus signs, unknown gates, and oversized circuits lose."""
     assert fitness(program)[1] == inf
-    with pytest.raises(ValueError, match="invalid winner"):
-        compare_winner(program)
 
 
 if __name__ == "__main__":
-    winner = evolve()
-    print(tuple(GATES[gene].name for gene in winner if gene))
-    print(compare_winner(winner).measure(lambda program: fitness(program)[1]))
+    for implementation, cost in evolve().measure(lambda p: fitness(p)[1]).items():
+        print(cost, [GATES[gene].name for gene in implementation() if gene])

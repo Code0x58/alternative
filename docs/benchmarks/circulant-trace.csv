@@ -1,4 +1,0 @@
-Matrix size,Dense NumPy,FFT identity,Speed ratio
-64,153.469,24.679,6x
-256,7007.573,45.550,154x
-512,49650.477,72.060,689x

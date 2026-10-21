@@ -1,99 +1,58 @@
 Matrix Optimisation with Cyclic Symmetry
 ========================================
 
-Keep a short NumPy definition as the reference, then exploit the structure of
-the matrix to eliminate expensive work. This example uses ordinary classical
-linear algebra. Its complete implementation, correctness tests, and benchmark
-are in :download:`one module <examples/test_circulant.py>`.
+Cyclic symmetry can turn a dense matrix calculation into one FFT. Consider
+:math:`\operatorname{tr}(C^p)` for a **circulant matrix**: every column is a cyclic
+shift of the first. These matrices arise in periodic convolution and random
+walks on a ring.
 
-The task is to compute :math:`\operatorname{tr}(C^p)` for a circulant matrix:
-each column is a cyclic shift of its predecessor. Such matrices describe
-periodic convolution; when their coefficients are probabilities, the trace of
-a power sums return probabilities for a random walk on a ring.
-
-The Direct Definition and the Shortcut
----------------------------------------
-
-The reference constructs the matrix from its first column, uses NumPy's
-``matrix_power``, and takes the trace. The candidate computes its eigenvalues
-with an FFT and sums their powers:
+The NumPy reference constructs and powers the matrix. Its specialised candidate
+needs only an FFT:
 
 .. literalinclude:: examples/test_circulant.py
    :language: python
    :start-at: @alternative.reference
    :end-before: @circulant_trace.pytest_parametrize()
 
-The cyclic shift matrix :math:`S` generates the cyclic group, and every
-circulant has the form :math:`C=\sum_j c_j S^j`. The discrete Fourier basis
-diagonalises :math:`S`, so it diagonalises :math:`C` too:
+Every circulant is a polynomial in the cyclic shift matrix :math:`S`:
+:math:`C=\sum_j c_j S^j`. The Fourier basis diagonalises :math:`S` and hence
+:math:`C`, with eigenvalues :math:`\lambda=\operatorname{FFT}(c)`. Therefore
 
 .. math::
 
-   \lambda_k=\sum_{j=0}^{n-1} c_j e^{-2\pi i jk/n}
-             =\operatorname{FFT}(c)_k,
-   \qquad \operatorname{tr}(C^p)=\sum_{k=0}^{n-1}\lambda_k^p.
+   \operatorname{tr}(C^p)=\sum_k\lambda_k^p.
 
-This removes both the :math:`n\times n` allocation and the dense matrix
-multiplications. For fixed powers of two or more, work changes from :math:`O(n^3)` to
-:math:`O(n\log n)`, and storage from :math:`O(n^2)` to :math:`O(n)`. NumPy's
-`matrix_power <https://numpy.org/doc/stable/reference/generated/numpy.linalg.matrix_power.html>`_
-already uses repeated squaring; the gain comes from changing the mathematics.
-SciPy uses the same
-`Fourier-space structure for circulant linear systems
+For a fixed power of two or more, cubic dense work becomes
+:math:`O(n\log n)` work, and storage drops from :math:`O(n^2)` to :math:`O(n)`.
+This is the same Fourier-space structure used in
+`circulant linear solvers
 <https://docs.scipy.org/doc/scipy/reference/generated/scipy.linalg.solve_circulant.html>`_.
+Real coefficients give conjugate-paired eigenvalues, so the trace is real.
 
-The demo accepts 1–512 real coefficients with absolute sum at most one and
-integer powers 0–8. These bounds keep the dense reference affordable and all
-eigenvalue magnitudes at most one. Zero powers include singular matrices and
-return :math:`n`. Real coefficients give conjugate-paired eigenvalues, which
-justify taking the real part of the final sum. The shortcut requires cyclic
-symmetry; a general dense matrix needs a different argument.
+Run the Tests and Benchmark
+----------------------------
 
-Tests and a Real Benchmark
----------------------------
-
-From a checkout, install the optional dependencies and run this module:
+With the :doc:`demo dependencies <applications>` installed:
 
 .. code-block:: console
 
-   $ pip install -e '.[demo]'
    $ pytest docs/examples/test_circulant.py
-   $ pytest docs/examples/test_circulant.py -k benchmark --benchmark-json=circulant-trace.json
+   $ pytest docs/examples/test_circulant.py -k benchmark
 
-The same file checks independent answers for identity matrices, cyclic shifts,
-zero powers, and rank-one matrices, then uses generated signed coefficients to
-compare both implementations. Comparisons allow absolute and relative error
-of :math:`10^{-10}`. These tests support the algebraic argument; they do not
-replace it.
+The :download:`complete module <examples/test_circulant.py>` assumes a nonempty
+real column and a nonnegative integer power. Its tests cover cyclic shifts,
+singular matrices, zero powers, and generated coefficients. They bound powers
+to 0–8 and the coefficients' absolute sum to one to keep rounding error small,
+then compare answers within absolute and relative tolerances of :math:`10^{-10}`.
+The benchmark includes construction, uses one BLAS thread, and measures several
+sizes. One Ryzen 2700X run at 512×512 took about 47 ms for dense powers and 38 µs
+for the FFT version, roughly 1,200× faster. Measure your own workload and machine.
 
-.. literalinclude:: examples/test_circulant.py
-   :language: python
-   :pyobject: test_benchmark
-
-.. csv-table:: Example median microseconds per call
-   :file: benchmarks/circulant-trace.csv
-   :header-rows: 1
-
-Both implementations include validation and all construction in the timed call,
-with the same coefficients and power seven. BLAS uses one thread; there is one
-warmup and nine measured calls. The :download:`measurement details
-<benchmarks/circulant-trace.json>` include the environment and samples. Timings
-depend on the machine; the improvement grows with matrix size. CI checks
-correctness without asserting a speed ratio.
-
-An Agent Task
---------------
-
-This also makes a focused task for an LLM agent:
+An LLM agent task:
 
 .. code-block:: text
 
-   Keep circulant_trace and its input contract as the readable reference.
-   Add a faster candidate and explain the identities and assumptions used.
-   Check independent answers and generated equivalence, including zero powers
-   and singular matrices. Benchmark complete calls at several matrix sizes.
-   Propose a default after reviewing correctness and measured performance.
-
-Keep additional correctness cases outside the optimisation feedback and review
-the proof assumptions. ``default=True`` in this example represents the reviewed
-selection; the direct definition remains available as ``circulant_trace.reference``.
+   Keep circulant_trace as the readable reference. Add a faster candidate,
+   explain its algebraic assumptions, and check independent and generated
+   answers, including singular matrices and zero powers. Benchmark complete
+   calls at several sizes before proposing the default.
