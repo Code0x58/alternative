@@ -34,6 +34,17 @@ Repository = "https://github.com/Code0x58/alternative"
 Issues = "https://github.com/Code0x58/alternative/issues"
 
 [project.optional-dependencies]
+demo = [
+    "deap>=1.4.3",
+    "hypothesis>=6.100",
+    "numpy>=1.26",
+    "pytest>=8.3.5",
+    "pytest-benchmark>=5.1.0",
+    "pytest-cov>=6.1.1",
+    "qiskit>=2.0",
+    "sybil>=9.3.0",
+    "threadpoolctl>=3.5",
+]
 dev = [
     "pytest>=8.3.5",
     "pytest-asyncio>=1.2.0",
@@ -44,7 +55,7 @@ dev = [
 
 [dependency-groups]
 dev = [
-    "alternative[dev]",
+    "alternative[dev,demo]",
     "build>=1.2.2",
     "hatch-vcs>=0.5.0",
     "hatchling>=1.27.0",
@@ -102,5 +113,5 @@ addopts = "--cov=alternative --cov-report=html --benchmark-max-time=0.01"
 python_version = "3.10"
 
 [[tool.mypy.overrides]]
-module = ["pytest"]
+module = ["deap.*", "pytest", "qiskit.*", "threadpoolctl"]
 ignore_missing_imports = true
