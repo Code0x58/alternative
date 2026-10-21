@@ -60,8 +60,8 @@ From a source checkout, install the ``demo`` extra and run its tests:
    $ pip install -e '.[demo]'
    $ pytest docs/examples/matrix_trace
 
-The extra installs NumPy, Hypothesis, and the benchmark tools. The ordinary
-library installation keeps its dependency-free runtime. The
+The extra installs NumPy, Hypothesis, DEAP, Qiskit, and the benchmark tools. The
+ordinary library installation keeps its dependency-free runtime. The
 `example directory
 <https://github.com/Code0x58/alternative/tree/master/docs/examples/matrix_trace>`_
 contains the complete package; the snippets here embed those files directly.
@@ -210,63 +210,139 @@ contract elsewhere.
 Evolutionary Search and Quantum Circuit Synthesis
 -------------------------------------------------
 
-A search loop can mutate gate sequences, simulate them, and retain cheaper valid
-circuits. Here the reference spells out :math:`HZH=X`; a candidate uses a single
-:math:`X` gate. The example also includes a wrong circuit and a constructor that
-raises, as a real generator may produce either.
+Use `DEAP <https://deap.readthedocs.io/en/master/overview.html>`_ to evolve a
+population of circuits, and Qiskit to evaluate their unitary action. DEAP
+provides selection, crossover, mutation, and a hall of fame. Hypothesis supplies
+generated correctness tests for the evaluator and the resulting candidates.
 
-For a cost to **minimise**, invalid candidates get :math:`+\infty`. They rank
-after every finite valid reference score. A maximisation objective would use
-:math:`-\infty` instead. Reject NaN scores rather than expecting sorting to place
-them reliably.
+The task is to implement a CNOT controlled by qubit 1 and targeting qubit 0.
+The readable reference reverses a CNOT in the other direction by conjugating
+both qubits with Hadamards:
 
 .. literalinclude:: examples/matrix_trace/circuit_search.py
    :language: python
+   :pyobject: reference_program
 
-The objective checks the whole unitary before counting gates. It distinguishes
-:math:`X` from :math:`-X`: global phase is part of this contract, as it matters
-when the operation is controlled. A search with a different equivalence notion
-must state that explicitly. Gate count is the example cost; a device-aware
-objective could assign weights or measure circuit depth.
+The allowed vocabulary includes Hadamards, Pauli gates, and CNOTs in either
+direction. A genome has seven integer slots; an identity token represents an
+empty slot. DEAP can therefore replace gates or remove them without requiring
+variable-length genetic operators. The search may discover the single reverse
+CNOT, but it is not given a handwritten winning candidate. This small vocabulary
+demonstrates the workflow; practical synthesis needs a cost and gate set that
+reflect the target device.
 
-The ``try`` block sits around **candidate construction and evaluation**. Passing
-an operator to ``.measure()`` cannot catch an implementation that raises before
-returning its result. Use an external objective such as ``score_candidate`` for
-fallible search attempts; use ``.measure()`` to score successfully returned
-objects. Catch expected candidate failures at that boundary, and let errors in
-the reference or search harness remain visible. Enforce execution budgets in the
-search runner for attempts that may not terminate.
+Correctness Before Cost
+~~~~~~~~~~~~~~~~~~~~~~~
 
-The population ranks as ``direct_x: 1``, ``synthesise_x: 3``, then the two invalid
-attempts at infinity. Scoring does not change the default: calling
-``synthesise_x()`` still returns the human-readable reference circuit. Keep this
-exploratory population separate from the validated implementations you promote
-for application calls.
+Qiskit's `Operator
+<https://quantum.cloud.ibm.com/docs/en/guides/operator-class>`_ computes a circuit's
+whole unitary locally, without an account or simulator backend. The example
+compares it with an independent matrix for the required basis-state permutation:
 
-Where Hypothesis Fits
-~~~~~~~~~~~~~~~~~~~~~
+.. literalinclude:: examples/matrix_trace/circuit_search.py
+   :language: python
+   :pyobject: simulate
 
-Hypothesis strategies can generate bounded programs as data, as well as inputs
-to numerical algorithms. This generated test constructs longer but valid
-circuits by cancelling a gate word with its reverse:
+Checking only the all-zero input would miss this operation's behavior on other
+states. Comparing matrices also preserves global phase. For this contract,
+:math:`U` and :math:`-U` are different: the phase can become observable when the
+operation is controlled. Qiskit's ``Operator.equiv`` allows global phase, so it
+would express a different contract.
+
+The fitness has two objectives, compared **lexicographically**: first minimise
+unitary error, then minimise the gate count of correct circuits. Errors within
+the explicit numerical tolerance count as zero:
+
+.. literalinclude:: examples/matrix_trace/circuit_search.py
+   :language: python
+   :pyobject: circuit_fitness
+
+Every correct circuit beats every incorrect circuit, even a cheaper one.
+Incorrect circuits still have an error distance that can guide evolution toward
+correctness. Giving every incorrect genome the same infinity fitness would
+discard that guidance. Failed construction and nonfinite error values rank last.
+The separate gate-cost objective is :math:`+\infty` for every incorrect or failed
+candidate, so it cannot displace the finite-cost reference on cost alone.
+
+Run the Evolution
+~~~~~~~~~~~~~~~~~~
+
+``evolve`` seeds the population with the validated reference and random genomes.
+It registers DEAP's two-point crossover and integer mutation, then uses its
+:math:`(\mu+\lambda)` algorithm. Selecting the best parents and offspring retains
+the best valid circuit, and the hall of fame records the winner:
+
+.. literalinclude:: examples/matrix_trace/circuit_search.py
+   :language: python
+   :pyobject: evolve
+
+Run it from the checkout with the same ``demo`` extra installed:
+
+.. code-block:: console
+
+   $ python -m docs.examples.matrix_trace.circuit_search
+
+The command prints the discovered circuit, the best valid gate count at each
+generation, and the finalists' costs. The default run uses 64 individuals and
+40 generations. For example, a run found ``('H0', 'H0', 'CX10')`` after starting
+with the five-gate reference. Its three gates have the required action because
+the two Hadamards cancel. Some runs reach the one-gate ``('CX10',)``; some retain
+the reference. A seed helps reproduce a run in the same environment, but the
+search budget does not guarantee improvement or an optimum.
+
+The :download:`complete example <examples/matrix_trace/circuit_search.py>` includes
+the genome representation and DEAP adapters. It is a bounded, sequential search:
+the seven-slot, two-qubit limit keeps full-unitary evaluation affordable. Larger
+unitaries require exponentially more memory. The demo saves and restores Python's
+random state because DEAP's standard operators use it; concurrent searches need
+separate worker processes.
+
+Review and Register the Winner
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Keep evolution outside the alternatives registry. Once the search finishes,
+validate the frozen finalist and create a fresh reference/candidate set:
+
+.. literalinclude:: examples/matrix_trace/circuit_search.py
+   :language: python
+   :pyobject: compare_winner
+
+Normal calls still use the readable reference. The command uses ``.measure()``
+to compare the finalists' gate counts; it does not select a default. After
+reviewing the result and its tests, register the chosen candidate with
+``default=True`` at application startup and validate it in a fresh run.
+
+For fallible generators, put the exception boundary around both construction and
+evaluation:
+
+.. literalinclude:: examples/matrix_trace/circuit_search.py
+   :language: python
+   :pyobject: score_candidate
+
+Passing an operator to ``.measure()`` cannot catch an implementation that raises
+before returning its result. Catch expected candidate failures at the external
+objective, while allowing reference or search-harness failures to stop the run.
+Enforce execution budgets in the search runner for attempts that may not
+terminate. See :doc:`workflow` for registration and :doc:`testing-contracts` for
+observable behavior beyond return values.
+
+Use Hypothesis to Challenge the Results
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+`Hypothesis <https://hypothesis.readthedocs.io/en/latest/tutorial/introduction.html>`_
+finds and shrinks counterexamples to claimed properties. Here it tests generated
+genomes for unitarity, and challenges the fitness evaluator with known-valid
+circuits constructed by cancelling self-inverse gate words:
 
 .. literalinclude:: examples/matrix_trace/test_search.py
    :language: python
    :pyobject: test_generated_valid_circuits
 
-Use `Hypothesis <https://hypothesis.readthedocs.io/en/latest/tutorial/introduction.html>`_
-to find and shrink counterexamples to a candidate's claimed equivalence. You
-still supply evolutionary selection, mutation, and crossover. If you experiment
-with `target()
-<https://hypothesis.readthedocs.io/en/latest/reference/api.html#hypothesis.target>`_,
-it maximises **finite** observations: an external infinity penalty cannot be
-passed directly to it. Use a finite metric on valid cases, and retain correctness
-assertions so counterexamples remain failures rather than being hidden by a
-fitness score.
-
-Each generation needs a complete population before inspection or scoring freezes
-registration. Create a fresh alternatives set or worker process for the next
-generation. After the search, register the reviewed winner with ``default=True``
-in application startup and validate it in a fresh run. See :doc:`workflow` for
-that lifecycle and :doc:`testing-contracts` for observable behavior beyond return
-values.
+Its ``target()`` feature can guide adaptive test generation, but an explicit
+genetic search benefits from DEAP's population and genetic operators. Keep
+correctness assertions in the tests: a counterexample should remain a test
+failure, rather than being hidden by an optimisation score. The
+:download:`search tests <examples/matrix_trace/test_search.py>` also cover the
+phase contract, construction failures, reference validation, and retaining a
+valid incumbent. They assert correctness and bounded cost, without requiring a
+stochastic search to find a particular optimum.
